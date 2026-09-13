@@ -1,0 +1,865 @@
+# Phase 0 — POC Prerequisites and Development Environment
+
+## 1. Objective
+
+Prepare and validate the local development environment for the Self-Improving Agent POC.
+
+The environment must support:
+
+* Python
+* uv
+* Git
+* Docker Desktop
+* Docker-based Llama 3.2
+* Google ADK 2
+* LiteLLM
+* SQLite
+* sqlite-vec
+* GraphQLite
+* pytest
+
+The POC will use:
+
+* **Docker Desktop** as the container runtime
+* **Llama 3.2** as the local LLM
+* **SQLite** as the primary database
+* **sqlite-vec** for vector/semantic memory
+* **GraphQLite** for graph relationships
+* **Google ADK 2** for agent orchestration
+* **LiteLLM** for LLM integration
+
+No Neo4j or external database is required.
+
+---
+
+# 2. Scope
+
+Phase 0 is responsible only for:
+
+```text
+Install
+   ↓
+Configure
+   ↓
+Connect
+   ↓
+Validate
+```
+
+It must NOT implement:
+
+* Agent reasoning
+* Self-improvement
+* Memory workflow
+* Critic
+* Learner
+* Strategy selection
+* Strategy optimization
+* Multi-agent architecture
+* Autonomous code modification
+
+Those capabilities belong to later phases.
+
+---
+
+# 3. Target Architecture
+
+The Phase 0 environment must support the following architecture:
+
+```text
+┌─────────────────────────────────────────────┐
+│              Windows Development            │
+│                                             │
+│  Python + Google ADK + LiteLLM              │
+│             │                               │
+│             │ HTTP                          │
+│             ▼                               │
+│       Docker Desktop                       │
+│             │                               │
+│             ▼                               │
+│       Llama 3.2 Container                  │
+│       docker.io/llama3.2                   │
+│                                             │
+│  SQLite                                     │
+│  ├── Structured Data                        │
+│  ├── sqlite-vec                             │
+│  └── GraphQLite                             │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+# 4. Operating System
+
+Primary development environment:
+
+* Windows 10 or Windows 11
+
+The project should not require Linux-specific commands or functionality.
+
+---
+
+# 5. Python
+
+Install Python 3.11 or later.
+
+Verify:
+
+```bash
+python --version
+```
+
+The project must use a project-specific virtual environment.
+
+Python dependencies must not rely on globally installed packages.
+
+---
+
+# 6. uv
+
+Use `uv` as the Python project and dependency manager.
+
+Verify:
+
+```bash
+uv --version
+```
+
+The project must use `uv` for:
+
+* Virtual environment
+* Dependency installation
+* Running Python
+* Running tests
+
+Example:
+
+```bash
+uv venv
+uv sync
+```
+
+---
+
+# 7. Git
+
+Git must be installed and available from the command line.
+
+Verify:
+
+```bash
+git --version
+```
+
+The project must contain a `.gitignore`.
+
+At minimum, ignore:
+
+```text
+.venv/
+.env
+*.db
+__pycache__/
+.pytest_cache/
+```
+
+---
+
+# 8. Docker Desktop
+
+Docker Desktop is required because the LLM is running inside Docker.
+
+Verify:
+
+```bash
+docker --version
+```
+
+and:
+
+```bash
+docker compose version
+```
+
+Docker Desktop must be running before the environment validation is executed.
+
+---
+
+# 9. Llama 3.2 Docker Runtime
+
+The POC will use the existing Docker-based Llama 3.2 runtime.
+
+Model/container image:
+
+```text
+docker.io/llama3.2
+```
+
+The implementation must NOT require the Ollama executable to be installed directly on Windows if the Docker-based Llama service already exposes the required API.
+
+The LLM endpoint must be configurable.
+
+Example:
+
+```env
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3.2
+```
+
+The actual endpoint must match the port/API exposed by the running Docker container.
+
+---
+
+# 10. LLM Connectivity
+
+The environment validation must verify that Python can communicate with the Docker-based Llama 3.2 service.
+
+The validation must:
+
+1. Connect to the configured LLM endpoint.
+2. Verify that the service is reachable.
+3. Verify that `llama3.2` is available.
+4. Send a simple test prompt.
+5. Receive a response.
+
+Example logical test:
+
+```text
+Prompt:
+    What is 2 + 2?
+
+Expected:
+    A response containing the correct result.
+```
+
+The test must not depend on a cloud LLM.
+
+---
+
+# 11. LLM Configuration
+
+All LLM configuration must be externalized.
+
+Create:
+
+```text
+.env.example
+```
+
+Example:
+
+```env
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3.2
+
+EMBEDDING_BASE_URL=http://localhost:11434
+EMBEDDING_MODEL=nomic-embed-text
+
+DATABASE_PATH=data/agent.db
+```
+
+The application must not hard-code:
+
+```text
+llama3.2
+localhost:11434
+database paths
+```
+
+throughout the source code.
+
+Configuration must have a single source of truth.
+
+---
+
+# 12. Embedding Model
+
+The POC will use:
+
+```text
+nomic-embed-text
+```
+
+for generating embeddings.
+
+The embedding model may run through the same Docker-based model service or another local endpoint.
+
+Its endpoint must be configurable:
+
+```env
+EMBEDDING_BASE_URL=http://localhost:11434
+EMBEDDING_MODEL=nomic-embed-text
+```
+
+The environment validation must verify that an embedding can be generated.
+
+Example validation:
+
+```text
+Input:
+    "Calculate 15 percent of 200"
+
+Output:
+    Numeric embedding vector
+```
+
+The exact embedding dimension must be detected from the model/runtime rather than hard-coded during Phase 0.
+
+---
+
+# 13. SQLite
+
+SQLite will be the primary database for the POC.
+
+No PostgreSQL, MySQL, or other external database is required.
+
+Python's built-in SQLite support should be used where possible.
+
+Verify:
+
+```bash
+python -c "import sqlite3; print(sqlite3.sqlite_version)"
+```
+
+The project database should be located at:
+
+```text
+data/agent.db
+```
+
+---
+
+# 14. sqlite-vec
+
+Install and configure `sqlite-vec`.
+
+The environment must validate:
+
+1. SQLite starts successfully.
+2. sqlite-vec is available.
+3. sqlite-vec can be loaded.
+4. A vector table can be created.
+5. A test embedding can be stored.
+6. A similarity search can be executed.
+
+The validation should be automated.
+
+The actual agent memory implementation belongs to Phase 2.
+
+---
+
+# 15. GraphQLite
+
+GraphQLite will provide graph functionality for this POC.
+
+The graph must remain local and SQLite-based.
+
+No Neo4j or external graph database should be introduced.
+
+The environment must validate that GraphQLite can represent relationships such as:
+
+```text
+Task
+ │
+ │ USES
+ ▼
+Strategy
+ │
+ │ PRODUCES
+ ▼
+Execution
+```
+
+The validation must demonstrate:
+
+1. Graph node creation.
+2. Relationship creation.
+3. Relationship query.
+4. Related-node retrieval.
+5. Cleanup of test graph data.
+
+The exact GraphQLite package/API must be determined from its supported installation method rather than inventing a custom graph implementation.
+
+---
+
+# 16. Google ADK 2
+
+Install Google ADK 2 using the project's Python dependency manager.
+
+Verify that ADK can be imported.
+
+Example:
+
+```bash
+uv run python -c "import google.adk; print('Google ADK OK')"
+```
+
+The installed version must be captured in:
+
+```text
+pyproject.toml
+uv.lock
+```
+
+Phase 0 only validates ADK installation.
+
+No production agent should be implemented yet.
+
+---
+
+# 17. LiteLLM
+
+Install LiteLLM.
+
+LiteLLM will provide the model integration layer between the ADK agent and the local Docker-based Llama runtime.
+
+Target architecture:
+
+```text
+Google ADK
+    │
+    ▼
+LiteLLM
+    │
+    ▼
+Docker Llama API
+    │
+    ▼
+llama3.2
+```
+
+The implementation must verify that LiteLLM can be imported and configured for the local model endpoint.
+
+No cloud API key should be required.
+
+---
+
+# 18. pytest
+
+Install pytest.
+
+Verify:
+
+```bash
+uv run pytest
+```
+
+At least one environment test must be implemented.
+
+---
+
+# 19. Project Structure
+
+Create the following initial structure:
+
+```text
+self-improving-agent/
+│
+├── agent/
+│
+├── database/
+│
+├── data/
+│
+├── scripts/
+│   └── check_environment.py
+│
+├── tests/
+│   └── test_environment.py
+│
+├── .env.example
+├── .gitignore
+├── pyproject.toml
+├── uv.lock
+└── README.md
+```
+
+Do not create unnecessary architecture during Phase 0.
+
+---
+
+# 20. Environment Validation Script
+
+Create:
+
+```text
+scripts/check_environment.py
+```
+
+The script must validate the complete POC environment.
+
+It should check:
+
+```text
+Python
+uv
+Git
+Docker
+Docker Compose
+SQLite
+sqlite-vec
+GraphQLite
+LLM endpoint
+Llama 3.2
+Embedding model
+Google ADK
+LiteLLM
+```
+
+Example output:
+
+```text
+=============================================
+Self-Improving Agent - Environment Check
+=============================================
+
+[PASS] Python
+[PASS] uv
+[PASS] Git
+[PASS] Docker
+[PASS] Docker Compose
+[PASS] SQLite
+[PASS] sqlite-vec
+[PASS] GraphQLite
+
+[PASS] LLM endpoint
+[PASS] llama3.2
+[PASS] Embedding model
+
+[PASS] Google ADK
+[PASS] LiteLLM
+
+=============================================
+Environment is ready.
+=============================================
+```
+
+If a dependency fails, the script must clearly identify it.
+
+Example:
+
+```text
+[FAIL] LLM endpoint
+       Unable to connect to http://localhost:11434
+```
+
+---
+
+# 21. LLM Environment Test
+
+The validation script must perform an actual LLM request.
+
+Example:
+
+```text
+Request:
+    Calculate 15% of 200.
+
+Expected:
+    30
+```
+
+The purpose is only to prove connectivity.
+
+It must not implement agent reasoning or self-improvement.
+
+---
+
+# 22. Embedding Environment Test
+
+The validation script must generate an embedding for a small test string.
+
+Example:
+
+```text
+Calculate 15% of 200.
+```
+
+The test must verify:
+
+```text
+embedding exists
+embedding is numeric
+embedding has a valid dimension
+```
+
+---
+
+# 23. SQLite Vector Test
+
+Create a temporary vector table and perform:
+
+```text
+Insert vector
+      ↓
+Similarity search
+      ↓
+Retrieve nearest vector
+```
+
+The test data should be deleted afterward.
+
+---
+
+# 24. GraphQLite Test
+
+Create temporary graph data:
+
+```text
+(Task: "Calculate percentage")
+          │
+          │ USES
+          ▼
+(Strategy: "Direct Calculation")
+```
+
+Verify that the relationship can be queried.
+
+Delete the test graph data afterward.
+
+This is only an infrastructure test.
+
+---
+
+# 25. Automated Tests
+
+Create:
+
+```text
+tests/test_environment.py
+```
+
+Tests should cover:
+
+```text
+test_python_environment
+test_sqlite
+test_sqlite_vec
+test_graphqlite
+test_llm_connection
+test_llm_model_available
+test_embedding_model_available
+test_adk_import
+test_litellm_import
+```
+
+Docker-dependent tests should provide clear error messages when Docker or the LLM container is unavailable.
+
+---
+
+# 26. Dependency Management
+
+All Python dependencies must be declared in:
+
+```text
+pyproject.toml
+```
+
+The project must generate:
+
+```text
+uv.lock
+```
+
+The implementation must not depend on manually installed global Python packages.
+
+A fresh environment must be reproducible using:
+
+```bash
+uv sync
+```
+
+---
+
+# 27. README
+
+Create a `README.md` containing:
+
+## Prerequisites
+
+```text
+Python
+uv
+Git
+Docker Desktop
+```
+
+## Python Setup
+
+```bash
+uv venv
+uv sync
+```
+
+## LLM
+
+Document that the POC uses:
+
+```text
+docker.io/llama3.2
+```
+
+Document the expected LLM API endpoint.
+
+## Configuration
+
+Document:
+
+```env
+LLM_BASE_URL=
+LLM_MODEL=
+EMBEDDING_BASE_URL=
+EMBEDDING_MODEL=
+DATABASE_PATH=
+```
+
+## Environment Validation
+
+```bash
+uv run python scripts/check_environment.py
+```
+
+## Tests
+
+```bash
+uv run pytest
+```
+
+---
+
+# 28. Out of Scope
+
+The following are explicitly excluded from Phase 0:
+
+* Self-improving agent
+* Agent orchestration workflow
+* Critic
+* Learner
+* Planner
+* Strategy optimizer
+* Long-term memory
+* Experience retrieval
+* Autonomous code modification
+* Multi-agent architecture
+* UI
+* REST API
+* MCP
+* A2A
+* Neo4j
+* PostgreSQL
+* Cloud LLM
+* Authentication
+* Production deployment
+
+---
+
+# 29. Acceptance Criteria
+
+Phase 0 is complete when:
+
+### AC-01
+
+Python is installed and the project virtual environment works.
+
+### AC-02
+
+The project can be synchronized using:
+
+```bash
+uv sync
+```
+
+### AC-03
+
+Git is available.
+
+### AC-04
+
+Docker Desktop is available and running.
+
+### AC-05
+
+The Docker-based Llama 3.2 service is reachable.
+
+### AC-06
+
+`llama3.2` successfully responds to a test prompt.
+
+### AC-07
+
+The embedding model successfully generates an embedding.
+
+### AC-08
+
+SQLite database creation works.
+
+### AC-09
+
+sqlite-vec vector insertion and similarity search work.
+
+### AC-10
+
+GraphQLite can create and query a graph relationship.
+
+### AC-11
+
+Google ADK 2 imports successfully.
+
+### AC-12
+
+LiteLLM imports successfully and can be configured for the local LLM.
+
+### AC-13
+
+The environment validation command succeeds:
+
+```bash
+uv run python scripts/check_environment.py
+```
+
+### AC-14
+
+The automated tests succeed:
+
+```bash
+uv run pytest
+```
+
+### AC-15
+
+No agent/self-improvement functionality has been implemented.
+
+---
+
+# 30. Definition of Done
+
+Phase 0 is considered complete when the following local stack is operational:
+
+```text
+                    Windows
+                       │
+                 Docker Desktop
+                       │
+                Llama 3.2
+             docker.io/llama3.2
+                       │
+                       │ HTTP
+                       ▼
+Python ───────► LiteLLM
+  │
+  └──────────► Google ADK 2
+  │
+  └──────────► SQLite
+                 │
+                 ├── sqlite-vec
+                 │
+                 └── GraphQLite
+```
+
+The final result of Phase 0 is a **repeatable, validated development environment**.
+
+No agent implementation is required.
+
+The project is then ready for:
+
+# Phase 1 — Basic ADK Agent

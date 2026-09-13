@@ -1,0 +1,778 @@
+# Phase 1 — Basic Google ADK Agent with ADK Web
+
+## 1. Objective
+
+Build the first working agent using **Google ADK 2** and the locally hosted **Llama 3.2** model running in Docker Desktop.
+
+The agent must be accessible and testable exclusively through:
+
+```bash
+adk web
+```
+
+The purpose of this phase is to prove that:
+
+```text
+ADK Web
+   ↓
+Google ADK Agent
+   ↓
+LiteLLM
+   ↓
+Docker Llama 3.2
+   ↓
+Response
+```
+
+works reliably.
+
+---
+
+# 2. Scope
+
+Phase 1 includes:
+
+* Google ADK 2
+* One root agent
+* ADK Web
+* LiteLLM
+* Docker-based Llama 3.2
+* Agent instructions
+* Model configuration
+* Environment configuration
+* Basic logging
+* Basic error handling
+* Basic automated tests
+
+Phase 1 does NOT include:
+
+* sqlite-vec memory
+* GraphQLite
+* Experience storage
+* Semantic retrieval
+* Critic agent
+* Learner agent
+* Evaluation
+* Lessons
+* Strategy optimization
+* Multiple agents
+* Self-improvement
+* Autonomous code modification
+* Custom CLI
+* Custom web UI
+* REST API
+
+---
+
+# 3. User Interface Requirement
+
+The POC must use **Google ADK Web as the only user interface**.
+
+The developer must NOT create:
+
+* Custom CLI
+* Custom chat UI
+* Blazor UI
+* React UI
+* REST endpoint for chat
+* Separate web application
+
+The user will interact with the agent through:
+
+```bash
+adk web
+```
+
+---
+
+# 4. Target Architecture
+
+```text
+┌──────────────────────┐
+│      Browser         │
+│     ADK Web UI       │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│    Google ADK 2      │
+│      Root Agent      │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│       LiteLLM        │
+└──────────┬───────────┘
+           │
+           │ HTTP
+           ▼
+┌──────────────────────┐
+│    Docker Desktop    │
+│                      │
+│  docker.io/llama3.2  │
+└──────────────────────┘
+```
+
+There must be only **one application agent** in Phase 1.
+
+---
+
+# 5. Agent Name
+
+Create a root agent named:
+
+```text
+self_improving_agent
+```
+
+The name must follow the naming requirements of Google ADK so that the agent can be discovered by:
+
+```bash
+adk web
+```
+
+The agent should be placed in an ADK-compatible directory.
+
+Example:
+
+```text
+self-improving-agent/
+│
+├── self_improving_agent/
+│   ├── __init__.py
+│   └── agent.py
+│
+├── tests/
+│   └── test_agent.py
+│
+├── .env.example
+├── .gitignore
+├── pyproject.toml
+├── uv.lock
+└── README.md
+```
+
+The exact directory structure may be adjusted to the Google ADK version being used, but the result must be discoverable by `adk web`.
+
+---
+
+# 6. Root Agent
+
+Implement one root ADK agent.
+
+The root agent must contain:
+
+* Agent name
+* Description
+* Model
+* Instructions
+
+The agent should be intentionally simple.
+
+Suggested instruction:
+
+```text
+You are a helpful reasoning assistant.
+
+Answer the user's request accurately and clearly.
+
+When a request requires calculation or reasoning, reason carefully before producing the final answer.
+
+Do not invent information when you are uncertain.
+
+Keep responses clear and concise.
+```
+
+Do not add memory or learning instructions yet.
+
+---
+
+# 7. Model
+
+The agent must use the local Llama 3.2 model.
+
+The model is running through Docker Desktop:
+
+```text
+docker.io/llama3.2
+```
+
+The implementation must not require a cloud LLM.
+
+The model endpoint must be configurable.
+
+Example:
+
+```env
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3.2
+```
+
+The actual endpoint must match the API exposed by the user's Docker container.
+
+---
+
+# 8. LiteLLM
+
+LiteLLM must be used as the model integration layer.
+
+Target architecture:
+
+```text
+Google ADK
+     │
+     ▼
+LiteLLM
+     │
+     ▼
+Docker Llama API
+     │
+     ▼
+llama3.2
+```
+
+The implementation must configure the model through LiteLLM in a way compatible with the installed Google ADK version.
+
+The exact LiteLLM model identifier must be kept in configuration rather than duplicated throughout the code.
+
+---
+
+# 9. Environment Configuration
+
+Create:
+
+```text
+.env.example
+```
+
+Example:
+
+```env
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3.2
+
+LOG_LEVEL=INFO
+```
+
+If the ADK/LiteLLM integration requires additional model configuration, add those values to `.env.example`.
+
+Do not commit the real `.env` file.
+
+---
+
+# 10. Configuration Module
+
+Create a small configuration layer.
+
+The configuration layer must provide:
+
+```text
+LLM_BASE_URL
+LLM_MODEL
+LOG_LEVEL
+```
+
+Configuration must be loaded from environment variables.
+
+The application must not contain hard-coded Docker endpoints or model names in multiple files.
+
+---
+
+# 11. ADK Web Execution
+
+The application must be executable using:
+
+```bash
+adk web
+```
+
+The developer should verify that ADK Web:
+
+1. Starts successfully.
+2. Discovers `self_improving_agent`.
+3. Displays the agent in the ADK Web interface.
+4. Allows a user to send a message.
+5. Sends the message to the root agent.
+6. Receives a response from Llama 3.2.
+7. Displays the response in the browser.
+
+---
+
+# 12. First Test Conversation
+
+Using ADK Web, enter:
+
+```text
+Calculate 15% of 200.
+```
+
+The agent should respond correctly:
+
+```text
+30
+```
+
+The exact wording does not need to be identical, but the answer must be correct.
+
+---
+
+# 13. Second Test
+
+Using ADK Web:
+
+```text
+What is 25 + 37?
+```
+
+The agent should return:
+
+```text
+62
+```
+
+---
+
+# 14. Third Test
+
+Using ADK Web:
+
+```text
+Explain what an API is in simple English.
+```
+
+The agent should provide a meaningful explanation.
+
+This verifies that the agent is not hard-coded only for mathematical questions.
+
+---
+
+# 15. Conversation Handling
+
+ADK Web should support multiple messages in the same session.
+
+Example:
+
+```text
+User:
+What is 20% of 500?
+
+Agent:
+100
+
+User:
+What about 10%?
+
+Agent:
+50
+```
+
+The agent may use the conversation/session capabilities provided by Google ADK.
+
+Do not implement a custom conversation-history database in Phase 1.
+
+Long-term memory belongs to Phase 2.
+
+---
+
+# 16. Logging
+
+Implement basic application logging.
+
+At minimum, capture:
+
+```text
+timestamp
+agent
+model
+request lifecycle
+success/failure
+error information
+```
+
+If ADK already provides execution/request logging, reuse the available ADK mechanisms rather than creating a duplicate logging framework.
+
+Do not build an extensive observability system in this phase.
+
+---
+
+# 17. Error Handling
+
+The agent must handle common failures gracefully.
+
+### LLM unavailable
+
+If the Docker Llama service is unavailable, the system must return/log a clear error.
+
+Example:
+
+```text
+Unable to connect to the configured LLM service.
+Verify that the Docker Llama 3.2 container is running.
+```
+
+### Invalid configuration
+
+If the model or endpoint is missing, the configuration error must be clear.
+
+### Model unavailable
+
+If `llama3.2` cannot be reached, the error must identify the configured model.
+
+The application should not silently fall back to a cloud model.
+
+---
+
+# 18. No Custom CLI
+
+The implementation must NOT create:
+
+```text
+python -m agent
+```
+
+as a user interface.
+
+The only supported interaction mechanism for Phase 1 is:
+
+```bash
+adk web
+```
+
+A command-line script may exist only for development/diagnostic purposes if required, but it must not become the application's user interface.
+
+---
+
+# 19. No Database Usage
+
+Although Phase 0 validates:
+
+```text
+SQLite
+sqlite-vec
+GraphQLite
+```
+
+Phase 1 must not use them for agent memory.
+
+Do not create final tables such as:
+
+```text
+tasks
+experiences
+strategies
+lessons
+evaluations
+executions
+```
+
+Those will be introduced in later phases.
+
+The purpose is to isolate the basic agent from memory functionality.
+
+---
+
+# 20. Testing Strategy
+
+Create:
+
+```text
+tests/test_agent.py
+```
+
+Tests should verify:
+
+### Test 1 — Agent Import
+
+The root agent can be imported.
+
+### Test 2 — Agent Creation
+
+The ADK agent can be instantiated successfully.
+
+### Test 3 — Configuration
+
+Required model configuration can be loaded.
+
+### Test 4 — Basic Model Request
+
+When the local model is available, the agent can process a simple request.
+
+Example:
+
+```text
+What is 2 + 2?
+```
+
+Expected result:
+
+```text
+4
+```
+
+### Test 5 — Error Handling
+
+Verify that an unavailable model endpoint results in a controlled failure.
+
+Tests that require Docker/Llama should be clearly separated from tests that can run without the external service.
+
+---
+
+# 21. Project Structure
+
+The Phase 1 project should remain small:
+
+```text
+self-improving-agent/
+│
+├── self_improving_agent/
+│   ├── __init__.py
+│   ├── agent.py
+│   └── config.py
+│
+├── tests/
+│   └── test_agent.py
+│
+├── data/
+│
+├── .env.example
+├── .gitignore
+├── pyproject.toml
+├── uv.lock
+└── README.md
+```
+
+Do not create:
+
+```text
+critic/
+learner/
+planner/
+memory/
+strategy/
+orchestrator/
+```
+
+yet.
+
+Those belong to later phases.
+
+---
+
+# 22. README Requirements
+
+Update `README.md` with:
+
+## Prerequisites
+
+* Python
+* uv
+* Docker Desktop
+* Docker-based Llama 3.2
+
+## Environment
+
+Explain the required environment variables.
+
+## Start LLM
+
+Document how to verify that the user's Docker Llama 3.2 container is running.
+
+Do not create a second Llama installation if the existing Docker setup is being used.
+
+## Start ADK Web
+
+The primary command must be:
+
+```bash
+adk web
+```
+
+## Test
+
+Explain how to select the agent in ADK Web and send a test request.
+
+---
+
+# 23. Manual Acceptance Test
+
+### Step 1
+
+Ensure Docker Desktop is running.
+
+### Step 2
+
+Ensure the Llama 3.2 container is running.
+
+### Step 3
+
+Start ADK Web:
+
+```bash
+adk web
+```
+
+### Step 4
+
+Open the ADK Web interface.
+
+### Step 5
+
+Select:
+
+```text
+self_improving_agent
+```
+
+### Step 6
+
+Send:
+
+```text
+Calculate 15% of 200.
+```
+
+### Step 7
+
+Verify the response is:
+
+```text
+30
+```
+
+### Step 8
+
+Send another request:
+
+```text
+What is 25 + 37?
+```
+
+Verify:
+
+```text
+62
+```
+
+### Step 9
+
+Send a natural-language request:
+
+```text
+Explain what an API is in simple English.
+```
+
+Verify that a meaningful answer is returned.
+
+---
+
+# 24. Acceptance Criteria
+
+### AC-01 — ADK Installation
+
+Google ADK 2 is installed and importable.
+
+### AC-02 — Agent Discovery
+
+The agent is discoverable by:
+
+```bash
+adk web
+```
+
+### AC-03 — ADK Web
+
+ADK Web starts successfully.
+
+### AC-04 — Agent Selection
+
+`self_improving_agent` appears in ADK Web.
+
+### AC-05 — Docker LLM
+
+The agent communicates with the Docker-hosted Llama 3.2 model.
+
+### AC-06 — Simple Calculation
+
+The agent correctly answers:
+
+```text
+Calculate 15% of 200.
+```
+
+### AC-07 — Multiple Requests
+
+The agent handles multiple requests during an ADK Web session.
+
+### AC-08 — Natural Language
+
+The agent can answer a general natural-language question.
+
+### AC-09 — Configuration
+
+LLM endpoint and model configuration are externalized.
+
+### AC-10 — Error Handling
+
+An unavailable LLM produces a controlled and understandable error.
+
+### AC-11 — Tests
+
+Automated tests pass:
+
+```bash
+uv run pytest
+```
+
+### AC-12 — No Memory
+
+No long-term memory is implemented.
+
+### AC-13 — No Self-Improvement
+
+No self-improvement logic is implemented.
+
+### AC-14 — No Custom UI
+
+No custom UI or CLI is implemented.
+
+---
+
+# 25. Definition of Done
+
+Phase 1 is complete when the following works:
+
+```text
+                 Browser
+                    │
+                    ▼
+                adk web
+                    │
+                    ▼
+          self_improving_agent
+                    │
+                    ▼
+             Google ADK 2
+                    │
+                    ▼
+                LiteLLM
+                    │
+                    ▼
+        Docker Desktop / Llama 3.2
+                    │
+                    ▼
+                 Response
+```
+
+A developer can run:
+
+```bash
+adk web
+```
+
+select the agent, send a question, and receive a response generated by the local Docker-based Llama 3.2 model.
+
+At this point, the basic agent foundation is proven.
+
+The project is ready for:
+
+# Phase 2 — Persistent Memory + sqlite-vec

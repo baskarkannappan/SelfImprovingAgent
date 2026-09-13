@@ -1,0 +1,1362 @@
+# Phase 6 — Continuous Improvement Validation and Benchmark
+
+## 1. Purpose
+
+This requirement validates that the Self-Improving Agent implemented in Phases 1–5 is **continuously improving its future behavior based on previous experiences, evaluations, lessons, strategies, agent performance, and workflow performance**.
+
+The system must provide measurable evidence that learning changes future decisions and improves outcomes.
+
+This phase is primarily a **validation and benchmarking phase**.
+
+It must NOT introduce a new learning mechanism.
+
+---
+
+# 2. Core Validation Question
+
+The system must be able to answer:
+
+> "Is the agent actually getting better from experience?"
+
+The validation must distinguish between:
+
+1. **Memory**
+
+   * The agent remembers previous information.
+
+2. **Retrieval**
+
+   * The agent retrieves relevant previous experiences or lessons.
+
+3. **Learning**
+
+   * The agent extracts reusable knowledge from previous results.
+
+4. **Adaptation**
+
+   * The agent changes strategy, workflow, or agent selection based on historical performance.
+
+5. **Improvement**
+
+   * Future task results demonstrate measurable improvement.
+
+Simply showing that an old lesson was retrieved is NOT sufficient evidence of continuous improvement.
+
+---
+
+# 3. Validation Architecture
+
+The validation system should use the existing Phase 1–5 architecture.
+
+```text
+                 ADK Web
+                    |
+                    v
+          Continuous Improvement
+                Benchmark
+                    |
+        +-----------+-----------+
+        |                       |
+        v                       v
+   Baseline Run            Learning Run
+        |                       |
+        v                       v
+   Empty History          Existing Knowledge
+        |                       |
+        +-----------+-----------+
+                    |
+                    v
+             Evaluation
+                    |
+                    v
+              Comparison
+                    |
+                    v
+           Improvement Report
+```
+
+The validation framework must reuse:
+
+* Google ADK 2
+* ADK Web
+* LiteLLM
+* Llama 3.2
+* SQLite
+* sqlite-vec
+* GraphQLite
+* nomic-embed-text
+* Phase 3 evaluation
+* Phase 3 lessons
+* Phase 4 strategies
+* Phase 4 strategy performance
+* Phase 5 agents
+* Phase 5 workflow performance
+* Phase 5 workflow preferences
+* Streamlit developer visualization
+
+No cloud LLM is permitted.
+
+---
+
+# 4. Validation Principle
+
+The validation must compare the agent's behavior at different points in time.
+
+At minimum:
+
+```text
+Initial State
+     |
+     v
+Baseline Benchmark
+     |
+     v
+Learning / Production Tasks
+     |
+     v
+Evaluation Benchmark
+     |
+     v
+Compare Results
+```
+
+The comparison must demonstrate whether previous experience changed future behavior.
+
+---
+
+# 5. Benchmark Dataset
+
+Create a fixed benchmark dataset.
+
+The initial POC should contain at least:
+
+```text
+10 benchmark tasks
+```
+
+The system should support increasing this to:
+
+```text
+20+
+```
+
+tasks later.
+
+Each benchmark task must contain:
+
+```text
+benchmark_id
+task
+task_type
+expected_behavior
+evaluation_criteria
+difficulty
+category
+```
+
+Example categories:
+
+```text
+calculation
+API design
+database design
+architecture
+performance
+distributed systems
+microservices
+debugging
+code reasoning
+trade-off analysis
+```
+
+---
+
+# 6. Important Benchmark Rule
+
+The benchmark must NOT consist only of exactly repeated questions.
+
+Use three types of tasks:
+
+### A. Repeated Tasks
+
+The same task is executed before and after learning.
+
+Purpose:
+
+```text
+Measure direct improvement.
+```
+
+Example:
+
+```text
+Design an order management system supporting
+100,000 concurrent users.
+```
+
+---
+
+### B. Related Tasks
+
+The wording and requirements are changed while preserving the underlying concept.
+
+Example:
+
+Baseline:
+
+```text
+Design an order management system for 100,000 concurrent users.
+```
+
+Later:
+
+```text
+Design a high-scale commerce platform handling
+100,000 simultaneous users across ordering,
+inventory and payment services.
+```
+
+Purpose:
+
+```text
+Measure whether lessons generalize.
+```
+
+---
+
+### C. Novel Tasks
+
+The agent receives a task it has never seen before.
+
+Purpose:
+
+```text
+Determine whether learned principles transfer
+to new problems.
+```
+
+---
+
+# 7. Baseline Run
+
+The first benchmark execution must start with no previous benchmark knowledge.
+
+The system should record:
+
+```text
+benchmark_id
+run_id
+timestamp
+
+answer
+evaluation
+selected_strategy
+selected_workflow
+selected_agents
+
+retrieved_experiences
+retrieved_lessons
+
+retry_count
+improvement_count
+
+duration_ms
+```
+
+For the baseline, historical knowledge should be empty or isolated.
+
+The system must NOT delete existing production data.
+
+Instead, use a dedicated benchmark namespace/database or benchmark run identifier.
+
+---
+
+# 8. Learning Run
+
+After the baseline benchmark:
+
+Execute a set of normal learning tasks.
+
+These tasks should intentionally provide opportunities for the system to learn.
+
+Example:
+
+```text
+Task 1:
+Design a scalable order management architecture.
+
+Task 2:
+Evaluate a shared-database architecture.
+
+Task 3:
+Compare synchronous and asynchronous order processing.
+
+Task 4:
+Design payment processing for high concurrency.
+
+Task 5:
+Design inventory consistency for distributed services.
+```
+
+The normal Phase 3–5 pipeline must execute:
+
+```text
+Task
+ ↓
+Retrieval
+ ↓
+Strategy Selection
+ ↓
+Workflow Selection
+ ↓
+Agents
+ ↓
+Answer
+ ↓
+Evaluation
+ ↓
+Learning
+ ↓
+Lesson
+ ↓
+Strategy Performance
+ ↓
+Agent Performance
+ ↓
+Workflow Performance
+```
+
+---
+
+# 9. Post-Learning Benchmark
+
+Execute the same benchmark again.
+
+The system should now have access to:
+
+```text
+Experiences
+Lessons
+Strategies
+Strategy Performance
+Strategy Preferences
+Agent Performance
+Workflow Performance
+Workflow Preferences
+```
+
+The benchmark must record exactly the same metrics as the baseline.
+
+---
+
+# 10. Primary Improvement Metrics
+
+The system must compare baseline and post-learning results.
+
+## 10.1 Correctness
+
+Measure:
+
+```text
+baseline_correctness
+post_learning_correctness
+improvement
+```
+
+Example:
+
+```text
+Baseline:       70%
+After learning: 90%
+
+Improvement:    +20 percentage points
+```
+
+---
+
+# 11. Evaluation Quality
+
+Measure:
+
+```text
+average_quality
+average_confidence
+```
+
+Example:
+
+```text
+Baseline quality:       2.8 / 4
+After learning:         3.5 / 4
+```
+
+The exact scoring mechanism should reuse the existing Phase 3 evaluation model.
+
+---
+
+# 12. Strategy Improvement
+
+Record:
+
+```text
+selected_strategy
+historical_success_rate
+```
+
+Determine whether the system begins selecting strategies that historically perform better.
+
+Example:
+
+```text
+Initial:
+
+direct_calculation
+success rate = 65%
+
+verify_calculation
+success rate = 90%
+```
+
+After sufficient experience:
+
+```text
+Selected strategy:
+verify_calculation
+```
+
+This demonstrates strategy adaptation.
+
+---
+
+# 13. Workflow Improvement
+
+Record:
+
+```text
+selected_workflow
+workflow_success_rate
+```
+
+Example:
+
+```text
+Initial workflow:
+
+Orchestrator
+ → Solver
+ → Evaluator
+
+Later:
+
+Orchestrator
+ → Planner
+ → Retrieval
+ → Strategy
+ → Solver
+ → Critic
+ → Improvement
+ → Final Answer
+```
+
+The system should choose the more effective workflow when historical evidence supports it.
+
+---
+
+# 14. Agent Improvement
+
+Record:
+
+```text
+agent_id
+execution_count
+success_count
+failure_count
+success_rate
+average_quality
+average_confidence
+average_duration
+```
+
+The system must demonstrate that historical agent performance can influence future agent selection.
+
+---
+
+# 15. Retrieval Improvement
+
+Measure:
+
+```text
+retrieved_experience_count
+retrieved_lesson_count
+retrieval_similarity
+retrieval_relevance
+```
+
+The validation should confirm that learned lessons relevant to the current task are retrieved.
+
+However:
+
+> Retrieval alone must NOT be considered proof of improvement.
+
+The final task result must also be evaluated.
+
+---
+
+# 16. Retry and Improvement Behavior
+
+Record:
+
+```text
+retry_count
+critic_triggered
+improvement_triggered
+final_answer_after_improvement
+```
+
+Example:
+
+```text
+Initial answer
+     ↓
+Critic detects problem
+     ↓
+Improvement agent
+     ↓
+Revised answer
+     ↓
+Final evaluation
+```
+
+The system should demonstrate that the agent can improve an answer within the same task.
+
+---
+
+# 17. Latency
+
+Measure:
+
+```text
+baseline_duration_ms
+post_learning_duration_ms
+```
+
+Learning should not automatically make the system significantly slower.
+
+If quality improves while latency increases, the report should clearly show the trade-off.
+
+---
+
+# 18. Improvement Score
+
+Create a benchmark summary containing at least:
+
+```text
+Correctness
+Quality
+Confidence
+Strategy effectiveness
+Workflow effectiveness
+Agent effectiveness
+Retry rate
+Improvement rate
+Latency
+```
+
+The system may calculate an overall improvement score, but the individual metrics must always remain visible.
+
+Do NOT hide all results behind a single score.
+
+---
+
+# 19. Continuous Improvement Must Not Mean Monotonic Improvement
+
+The system must NOT assume:
+
+```text
+Run 1 = 70%
+Run 2 = 75%
+Run 3 = 80%
+Run 4 = 85%
+```
+
+Real systems may fluctuate.
+
+Instead, demonstrate improvement statistically or over multiple benchmark runs.
+
+Example:
+
+```text
+Run 1: 70%
+Run 2: 75%
+Run 3: 73%
+Run 4: 82%
+Run 5: 85%
+```
+
+This can still represent improvement.
+
+---
+
+# 20. Multiple Runs
+
+Because Llama 3.2 is probabilistic, a single run must not be treated as definitive proof.
+
+Support:
+
+```text
+BENCHMARK_RUNS=3
+```
+
+or higher.
+
+For example:
+
+```text
+Baseline
+
+Run 1
+Run 2
+Run 3
+
+Post-learning
+
+Run 1
+Run 2
+Run 3
+```
+
+Calculate aggregate results.
+
+---
+
+# 21. Benchmark Isolation
+
+Benchmark data must be identifiable.
+
+Add:
+
+```text
+benchmark_run_id
+benchmark_phase
+benchmark_mode
+```
+
+Possible modes:
+
+```text
+baseline
+learning
+evaluation
+```
+
+This prevents benchmark records from becoming mixed with ordinary application experiences.
+
+---
+
+# 22. Controlled Baseline
+
+The baseline must support:
+
+```text
+learning_enabled = false
+```
+
+or an equivalent isolated knowledge state.
+
+This is important.
+
+The benchmark must be able to prove:
+
+```text
+Before learning
+vs.
+After learning
+```
+
+without relying on subjective interpretation.
+
+---
+
+# 23. Learning Verification
+
+For every benchmark task that generates a useful lesson, the system must be able to trace:
+
+```text
+Task
+ ↓
+Experience
+ ↓
+Evaluation
+ ↓
+Lesson
+ ↓
+Embedding
+ ↓
+Retrieval in later task
+ ↓
+Strategy / Workflow decision
+ ↓
+New Experience
+ ↓
+Evaluation
+```
+
+This is the complete learning chain.
+
+---
+
+# 24. GraphQLite Validation
+
+GraphQLite must make the learning chain observable.
+
+Example:
+
+```text
+Task
+  |
+  +--produces--> Experience
+                    |
+                    +--evaluated_by--> Evaluation
+                                         |
+                                         +--produces--> Lesson
+                                                          |
+                                                          +--influences--> Strategy
+                                                          |
+                                                          +--influences--> Workflow
+```
+
+For Phase 5:
+
+```text
+Task
+ ↓
+Workflow
+ ↓
+WorkflowExecution
+ ↓
+AgentExecution
+ ↓
+Experience
+ ↓
+Evaluation
+ ↓
+Lesson
+```
+
+The validation must confirm these relationships exist.
+
+---
+
+# 25. Streamlit Validation Dashboard
+
+The existing developer Streamlit application must provide a new:
+
+```text
+Continuous Improvement
+```
+
+page.
+
+It should contain the following sections.
+
+### Benchmark Summary
+
+```text
+Baseline Correctness
+Post-Learning Correctness
+Improvement %
+```
+
+### Quality
+
+```text
+Baseline Quality
+Post-Learning Quality
+```
+
+### Strategy
+
+```text
+Strategy selected before
+Strategy selected after
+Historical success rate
+```
+
+### Workflow
+
+```text
+Workflow selected before
+Workflow selected after
+Historical success rate
+```
+
+### Agents
+
+```text
+Agent
+Executions
+Success Rate
+Quality
+Latency
+```
+
+### Learning
+
+```text
+Lessons Created
+Lessons Retrieved
+Lessons Reused
+```
+
+### Improvement
+
+```text
+Critic Invocations
+Improvement Invocations
+Successful Improvements
+Retry Rate
+```
+
+### Latency
+
+```text
+Baseline latency
+Post-learning latency
+```
+
+---
+
+# 26. Learning Trace
+
+The Streamlit application must provide a detailed trace for each benchmark task.
+
+Example:
+
+```text
+Benchmark: B001
+
+Task
+ ↓
+Retrieved Experiences
+ ↓
+Retrieved Lessons
+ ↓
+Selected Strategy
+ ↓
+Selected Workflow
+ ↓
+Selected Agents
+ ↓
+Execution
+ ↓
+Evaluation
+ ↓
+Lesson Generated
+ ↓
+Future Retrieval
+ ↓
+Future Strategy Selection
+ ↓
+Future Result
+```
+
+This is the most important debugging view.
+
+---
+
+# 27. Five Required Validation Prompts
+
+The system must support the following five manual validation prompts through ADK Web.
+
+## Prompt 1 — Baseline
+
+```text
+Design a production-ready order management architecture
+supporting 10,000 concurrent users.
+
+Include customer, order, product, order status,
+database, API, scalability, caching, and failure handling.
+
+Do not use previous assumptions or learned knowledge.
+Provide your best initial architecture.
+
+This is a baseline benchmark.
+```
+
+Record:
+
+```text
+answer
+evaluation
+strategy
+workflow
+agents
+duration
+```
+
+---
+
+## Prompt 2 — Learning Reuse
+
+```text
+Design a production-ready commerce architecture
+supporting 20,000 concurrent users.
+
+Include customer, order, payment, shipping,
+inventory, database, scalability, caching,
+messaging, and failure handling.
+
+Use relevant experiences, lessons, strategies,
+agent performance, and workflow knowledge from
+previous tasks if available.
+
+At the end, identify which previous knowledge
+influenced your decisions.
+```
+
+Validate:
+
+```text
+lesson retrieval
+strategy reuse
+workflow reuse
+agent selection
+answer quality
+```
+
+---
+
+## Prompt 3 — Critic and Improvement
+
+```text
+Consider the following architecture for an order system
+supporting 100,000 concurrent users:
+
+All services share one relational database.
+All requests are synchronous.
+Order, payment, inventory, and shipping are tightly coupled.
+
+Evaluate this architecture.
+
+Identify scalability, availability, performance,
+coupling, and failure-handling problems.
+
+If the architecture is inadequate, use the critic and
+improvement workflow to produce a better architecture.
+
+Record what was wrong with the original approach
+and what was improved.
+```
+
+Validate:
+
+```text
+Critic
+Improvement
+Retry
+Final evaluation
+Lesson generation
+```
+
+---
+
+## Prompt 4 — New Session Persistence
+
+Start a new ADK Web session.
+
+```text
+Design a scalable order processing system supporting
+100,000 concurrent users.
+
+Compare:
+
+1. Shared database architecture
+2. Database-per-service architecture
+
+Use previous lessons and historical strategy/workflow
+performance if available.
+
+Explain why the selected approach is better.
+```
+
+Validate that knowledge survives:
+
+```text
+new ADK session
+agent restart
+application restart
+```
+
+---
+
+## Prompt 5 — Full Continuous Improvement
+
+```text
+Design a production-ready order management platform
+supporting 100,000 concurrent users.
+
+The platform must support:
+
+- Customer
+- Product
+- Order
+- Payment
+- Inventory
+- Shipping
+- Notifications
+- Order tracking
+
+Use historical experiences and lessons.
+
+Select the strategy with the best historical performance
+for this type of task.
+
+Select the workflow with the best historical performance.
+
+Select appropriate specialized agents.
+
+Critically evaluate the generated solution.
+
+If weaknesses are found, improve the solution.
+
+At the end, provide a validation summary containing:
+
+1. Selected workflow
+2. Selected strategy
+3. Selected agents
+4. Retrieved lessons
+5. Whether critic was invoked
+6. Whether improvement was required
+7. Whether retry occurred
+8. Final evaluation
+9. New lesson generated
+10. Historical knowledge that influenced the result
+```
+
+---
+
+# 28. Required Validation Sequence
+
+The five prompts should be executed in this order:
+
+```text
+Prompt 1
+   ↓
+Baseline
+
+Prompt 2
+   ↓
+Learning reuse
+
+Prompt 3
+   ↓
+Critic + improvement
+
+Prompt 4
+   ↓
+New session persistence
+
+Prompt 5
+   ↓
+Full continuous improvement
+```
+
+Then execute the benchmark dataset again.
+
+---
+
+# 29. Strongest Continuous-Improvement Test
+
+The strongest validation is:
+
+```text
+Benchmark A
+    ↓
+Baseline
+    ↓
+Learning
+    ↓
+Benchmark A again
+```
+
+Then compare:
+
+```text
+                  Before       After
+
+Correctness        70%         90%
+Quality            2.8         3.6
+Strategy success   70%         88%
+Workflow success   72%         91%
+Retry rate         30%         15%
+Lesson reuse        0%         80%
+```
+
+The actual values must come from the system.
+
+No values may be hardcoded.
+
+---
+
+# 30. Acceptance Criteria
+
+Phase 6 is complete only when all of the following are demonstrated.
+
+### AC-01 — Baseline
+
+The system can execute a benchmark with isolated/empty historical knowledge.
+
+### AC-02 — Persistence
+
+Experiences, evaluations, lessons, strategies, agent performance, and workflow performance survive application and ADK session restart.
+
+### AC-03 — Learning
+
+The system generates reusable lessons from evaluated experiences.
+
+### AC-04 — Retrieval
+
+Relevant lessons can be retrieved for later tasks.
+
+### AC-05 — Strategy Adaptation
+
+Historical strategy performance influences future strategy selection.
+
+### AC-06 — Workflow Adaptation
+
+Historical workflow performance influences future workflow selection.
+
+### AC-07 — Agent Adaptation
+
+Historical agent performance can influence future agent selection.
+
+### AC-08 — Critic
+
+The system can identify weaknesses in an answer.
+
+### AC-09 — Improvement
+
+The system can produce an improved answer after criticism.
+
+### AC-10 — Generalization
+
+A learned lesson can influence a related but differently worded task.
+
+### AC-11 — New Session
+
+Learning remains available in a new ADK Web session.
+
+### AC-12 — Restart
+
+Learning remains available after restarting the application.
+
+### AC-13 — Measurement
+
+Baseline and post-learning metrics are automatically recorded.
+
+### AC-14 — Comparison
+
+The system can compare baseline and post-learning benchmark results.
+
+### AC-15 — Visualization
+
+Streamlit displays the complete continuous-improvement trace.
+
+### AC-16 — Graph
+
+GraphQLite shows the relationships between task, experience, evaluation, lesson, strategy, workflow, and agents.
+
+### AC-17 — Failure Isolation
+
+Failure of evaluation, learning, or visualization must not prevent the main agent from answering the user.
+
+### AC-18 — No False Improvement
+
+The system must not claim improvement merely because a lesson was retrieved.
+
+Actual task/evaluation metrics must support the claim.
+
+### AC-19 — No Self-Modifying Code
+
+The system must NOT modify:
+
+```text
+source code
+agent prompts
+Python files
+workflow definitions
+strategy implementation
+```
+
+Improvement must occur through learned data and controlled configuration.
+
+### AC-20 — No Infinite Learning
+
+Learning must occur only as a consequence of:
+
+```text
+real task
+benchmark task
+explicit developer test
+```
+
+There must be no autonomous infinite learning loop.
+
+---
+
+# 31. Final Validation Report
+
+The system must be able to produce a report similar to:
+
+```text
+CONTINUOUS IMPROVEMENT VALIDATION
+
+Benchmark:
+Order Management Architecture
+
+Runs:
+Baseline = 3
+Post-learning = 3
+
+----------------------------------
+CORRECTNESS
+----------------------------------
+Baseline:       X%
+Post-learning:  Y%
+Change:         Z%
+
+----------------------------------
+QUALITY
+----------------------------------
+Baseline:       X
+Post-learning:  Y
+
+----------------------------------
+STRATEGY
+----------------------------------
+Initial Strategy:      XXXXX
+Final Strategy:        XXXXX
+Historical Success:    XX%
+
+----------------------------------
+WORKFLOW
+----------------------------------
+Initial Workflow:      XXXXX
+Final Workflow:        XXXXX
+Historical Success:    XX%
+
+----------------------------------
+LESSONS
+----------------------------------
+Lessons Generated:     X
+Lessons Retrieved:     X
+Lessons Reused:        X
+
+----------------------------------
+AGENTS
+----------------------------------
+Best Performing Agent: XXXXX
+Success Rate:          XX%
+
+----------------------------------
+IMPROVEMENT
+----------------------------------
+Critic Invocations:    X
+Improvement Invocations: X
+Successful Improvements: X
+
+----------------------------------
+LATENCY
+----------------------------------
+Baseline:              X ms
+Post-learning:         Y ms
+
+----------------------------------
+CONCLUSION
+----------------------------------
+
+The benchmark demonstrates / does not demonstrate
+measurable continuous improvement.
+
+Evidence:
+- ...
+- ...
+- ...
+```
+
+The conclusion must be generated from actual benchmark data.
+
+It must NOT simply say:
+
+```text
+"The agent improved because it remembered previous lessons."
+```
+
+---
+
+# 32. Final Definition of Success
+
+The Self-Improving Agent will be considered successfully validated when the system demonstrates this complete cycle:
+
+```text
+             EXPERIENCE
+                  ↓
+             EVALUATION
+                  ↓
+               LESSON
+                  ↓
+              MEMORY
+                  ↓
+             RETRIEVAL
+                  ↓
+          STRATEGY SELECTION
+                  ↓
+          WORKFLOW SELECTION
+                  ↓
+            AGENT SELECTION
+                  ↓
+               SOLUTION
+                  ↓
+               CRITIC
+                  ↓
+             IMPROVEMENT
+                  ↓
+             NEW RESULT
+                  ↓
+             NEW EVALUATION
+                  ↓
+        MEASURABLE IMPROVEMENT
+```
+
+The most important acceptance condition is:
+
+> **A future benchmark result must demonstrate measurable improvement compared with the baseline, while the system can provide a trace showing which learned experiences, lessons, strategies, workflows, or agent-performance information caused the change.**
+
+---
+
+# 33. Out of Scope
+
+This phase must NOT introduce:
+
+* cloud LLMs
+* OpenAI API
+* external AI services
+* Neo4j
+* PostgreSQL
+* Kubernetes
+* distributed agents
+* production authentication
+* autonomous code modification
+* autonomous prompt modification
+* autonomous strategy implementation generation
+* autonomous database schema modification
+* infinite autonomous learning
+* production deployment automation
+* replacing ADK Web
+* replacing Streamlit
+* replacing SQLite/sqlite-vec/GraphQLite
+
+```
+
+This is the requirement I would give to **SpecKit/Antigravity as Phase 6**. The important addition compared with simply running the five prompts is the **baseline → learning → repeat benchmark → measurable comparison**. That is what lets you confidently say the agent is improving rather than just remembering.
+```

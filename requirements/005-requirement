@@ -1,0 +1,1750 @@
+# Phase 4 — Strategy Optimization and Adaptive Strategy Selection
+
+## 1. Document Purpose
+
+This document defines Phase 4 of the Self-Improving Agent POC.
+
+Phase 4 extends the Phase 3 system from:
+
+> **Remember → Evaluate → Learn**
+
+to:
+
+> **Try different strategies → Evaluate → Compare → Select the better strategy → Remember the result**
+
+The objective is to demonstrate that the agent can learn which problem-solving strategy works better for a particular type of task and use that knowledge for future requests.
+
+This phase must remain a local, deterministic, testable POC.
+
+---
+
+# 2. Existing Technology Stack
+
+The implementation MUST continue using the existing Phase 3 technology stack.
+
+### Required
+
+* Python 3.11+
+* uv
+* Google ADK 2
+* ADK Web
+* LiteLLM
+* Llama 3.2 running locally
+* Ollama/local model endpoint
+* SQLite
+* sqlite-vec
+* GraphQLite
+* nomic-embed-text
+* Streamlit
+* pytest
+
+### Model
+
+The system MUST use the existing local Llama 3.2 model.
+
+The system MUST NOT require a cloud LLM.
+
+The same Llama 3.2 model may be used for:
+
+* Main Agent
+* Evaluator
+* Strategy analysis
+* Strategy selection
+* Learning
+
+Different logical roles do not require different models.
+
+---
+
+# 3. Relationship With Previous Phases
+
+Phase 4 MUST build on Phase 3.
+
+### Phase 1
+
+Basic agent:
+
+```text
+User
+ ↓
+Main Agent
+ ↓
+Llama 3.2
+ ↓
+Answer
+```
+
+### Phase 2
+
+Persistent memory:
+
+```text
+User
+ ↓
+Memory Retrieval
+ ↓
+Main Agent
+ ↓
+Answer
+ ↓
+Store Experience
+```
+
+### Phase 3
+
+Self-evaluation and learning:
+
+```text
+User
+ ↓
+Memory Retrieval
+ ↓
+Main Agent
+ ↓
+Answer
+ ↓
+Evaluator
+ ↓
+Evaluation
+ ↓
+Learner
+ ↓
+Lesson
+ ↓
+SQLite + sqlite-vec + GraphQLite
+```
+
+### Phase 4
+
+Strategy optimization:
+
+```text
+User
+ ↓
+Memory Retrieval
+ ↓
+Lesson Retrieval
+ ↓
+Strategy Selector
+ ↓
+Selected Strategy
+ ↓
+Main Agent
+ ↓
+Answer
+ ↓
+Evaluator
+ ↓
+Strategy Evaluation
+ ↓
+Strategy Performance
+ ↓
+Strategy Learning
+ ↓
+Update Strategy Knowledge
+```
+
+---
+
+# 4. Phase 4 Goal
+
+The system must support multiple strategies for solving a task.
+
+The system must be able to:
+
+1. Identify the type of task.
+2. Identify available strategies.
+3. Select an appropriate strategy.
+4. Execute the selected strategy.
+5. Evaluate the result.
+6. Record the strategy's performance.
+7. Compare strategies over multiple executions.
+8. Determine which strategy performs better.
+9. Store the learned strategy preference.
+10. Use the learned preference on future requests.
+
+The system should demonstrate that previous strategy performance influences future strategy selection.
+
+---
+
+# 5. Definition of Strategy
+
+A strategy is a defined approach for solving a particular category of problem.
+
+A strategy MUST NOT initially mean arbitrary generated code.
+
+A strategy should be represented as structured configuration/data.
+
+Example:
+
+```json
+{
+  "strategy_name": "verify_calculation",
+  "task_type": "calculation",
+  "description": "Calculate the result and perform an independent verification before responding.",
+  "steps": [
+    "calculate",
+    "verify",
+    "respond"
+  ]
+}
+```
+
+Another strategy:
+
+```json
+{
+  "strategy_name": "direct_calculation",
+  "task_type": "calculation",
+  "description": "Calculate the result directly and respond.",
+  "steps": [
+    "calculate",
+    "respond"
+  ]
+}
+```
+
+---
+
+# 6. Initial Strategy Set
+
+The POC MUST start with a small, controlled set of strategies.
+
+Do not attempt to create a large strategy library.
+
+At minimum, implement strategies for one or two task categories.
+
+Recommended initial category:
+
+```text
+calculation
+```
+
+Example strategies:
+
+### Strategy A — Direct
+
+```text
+Read problem
+ ↓
+Calculate
+ ↓
+Answer
+```
+
+### Strategy B — Verify
+
+```text
+Read problem
+ ↓
+Calculate
+ ↓
+Perform independent verification
+ ↓
+Answer
+```
+
+### Strategy C — Step-by-Step
+
+```text
+Read problem
+ ↓
+Break problem into steps
+ ↓
+Calculate each step
+ ↓
+Verify
+ ↓
+Answer
+```
+
+The exact number of strategies MAY be configurable.
+
+---
+
+# 7. Strategy Registry
+
+Implement a Strategy Registry.
+
+The registry MUST contain the available strategies.
+
+Conceptually:
+
+```text
+Strategy Registry
+ ├── direct_calculation
+ ├── verify_calculation
+ └── step_by_step_calculation
+```
+
+Each strategy should contain at least:
+
+```text
+id
+name
+task_type
+description
+steps
+enabled
+created_at
+```
+
+The registry should be deterministic.
+
+The LLM MUST NOT be allowed to invent arbitrary executable strategies during normal execution.
+
+---
+
+# 8. Task Classification
+
+The system must determine the task category before strategy selection.
+
+Example:
+
+```text
+User:
+What is 15% of 200?
+
+Task Type:
+calculation
+```
+
+Another example:
+
+```text
+User:
+Explain microservices architecture.
+
+Task Type:
+explanation
+```
+
+For the initial POC, task classification may use deterministic rules.
+
+An LLM-based classifier MAY be introduced later, but it is not required.
+
+The classification result must be recorded.
+
+---
+
+# 9. Strategy Selection
+
+Create a Strategy Selector component.
+
+The Strategy Selector receives:
+
+```text
+User Request
+Task Type
+Available Strategies
+Previous Strategy Performance
+Relevant Lessons
+```
+
+It produces:
+
+```text
+Selected Strategy
+```
+
+Example:
+
+```text
+Task:
+What is 25% of 400?
+
+Task Type:
+calculation
+
+Available:
+direct_calculation
+verify_calculation
+step_by_step_calculation
+
+Historical performance:
+verify_calculation = 95%
+direct_calculation = 82%
+step_by_step_calculation = 88%
+
+Selected:
+verify_calculation
+```
+
+---
+
+# 10. Initial Strategy Selection Rules
+
+The first implementation MUST be deterministic.
+
+The system should not immediately rely on an LLM to decide which strategy to use.
+
+Use a simple scoring mechanism.
+
+Example:
+
+```text
+strategy_score =
+    historical_success_score
+    + quality_score
+    + confidence_score
+    + task_type_match_score
+```
+
+The exact formula can be configurable.
+
+If there is insufficient historical information, the system should use a defined exploration rule.
+
+---
+
+# 11. Exploration vs Exploitation
+
+Phase 4 MUST introduce the basic concept of:
+
+### Exploitation
+
+Use the strategy currently known to perform best.
+
+### Exploration
+
+Occasionally test another available strategy to determine whether it may perform better.
+
+Example:
+
+```text
+Strategy A → 90% success
+Strategy B → 70% success
+Strategy C → unknown
+```
+
+Normally:
+
+```text
+choose A
+```
+
+But occasionally:
+
+```text
+try B or C
+```
+
+This prevents the system from permanently selecting the first strategy that happened to work.
+
+The initial implementation does NOT need a sophisticated reinforcement-learning algorithm.
+
+A simple configurable exploration mechanism is sufficient.
+
+Example configuration:
+
+```text
+STRATEGY_EXPLORATION_RATE=0.10
+```
+
+Meaning approximately 10% of eligible strategy selections may explore another strategy.
+
+---
+
+# 12. Strategy Execution
+
+Create a Strategy Executor.
+
+The executor receives:
+
+```text
+Task
+Selected Strategy
+Relevant Memory
+Relevant Lessons
+```
+
+and produces:
+
+```text
+Answer
+Execution Metadata
+```
+
+The executor MUST record:
+
+```text
+strategy_id
+task_type
+experience_id
+execution_start
+execution_end
+duration
+status
+```
+
+---
+
+# 13. Strategy Evaluation
+
+The existing Phase 3 Evaluator MUST be extended to evaluate strategy performance.
+
+The evaluator should evaluate both:
+
+### Answer quality
+
+```text
+correct
+quality
+confidence
+reason
+```
+
+and:
+
+### Strategy performance
+
+```text
+strategy_effectiveness
+```
+
+Example:
+
+```json
+{
+  "correct": true,
+  "quality": "excellent",
+  "confidence": "high",
+  "strategy_effectiveness": "good",
+  "reason": "The verification step detected and prevented calculation errors."
+}
+```
+
+---
+
+# 14. Strategy Performance Record
+
+Introduce persistent strategy performance information.
+
+A strategy performance record should contain at least:
+
+```text
+id
+strategy_id
+task_type
+experience_id
+evaluation_id
+success
+quality
+confidence
+duration_ms
+created_at
+```
+
+This information MUST be persisted in SQLite.
+
+The system must be able to calculate historical performance.
+
+Example:
+
+```text
+Strategy: verify_calculation
+
+Executions: 20
+Successful: 19
+Failed: 1
+Success Rate: 95%
+Average Quality: excellent
+Average Duration: 1.8 seconds
+```
+
+---
+
+# 15. Strategy Statistics
+
+The system should calculate aggregated statistics.
+
+At minimum:
+
+```text
+total executions
+successful executions
+failed executions
+success rate
+average quality
+average confidence
+average execution time
+```
+
+Statistics should be calculated per:
+
+```text
+strategy
+task type
+```
+
+Example:
+
+```text
+calculation
+
+direct_calculation
+    success rate: 82%
+
+verify_calculation
+    success rate: 95%
+
+step_by_step_calculation
+    success rate: 88%
+```
+
+---
+
+# 16. Strategy Comparison
+
+Create a Strategy Comparison component.
+
+It receives performance statistics for multiple strategies.
+
+Example:
+
+```text
+Strategy A
+Success: 82%
+
+Strategy B
+Success: 95%
+
+Strategy C
+Success: 88%
+```
+
+Result:
+
+```text
+Best Strategy:
+Strategy B
+```
+
+The comparison MUST consider more than one metric where appropriate.
+
+At minimum:
+
+```text
+correctness
+quality
+confidence
+```
+
+Execution time may be included as a secondary metric.
+
+Correctness should have higher importance than speed.
+
+---
+
+# 17. Strategy Learning
+
+After sufficient executions, the system should learn strategy preferences.
+
+Example:
+
+```text
+Task Type: calculation
+
+Best Strategy:
+verify_calculation
+```
+
+This information must be persisted.
+
+The learned preference should NOT overwrite the strategy definition.
+
+Instead, maintain separate strategy-performance knowledge.
+
+Conceptually:
+
+```text
+Strategy Definition
+        +
+Historical Performance
+        +
+Task Type
+        ↓
+Strategy Preference
+```
+
+---
+
+# 18. Strategy Preference
+
+Introduce a persistent strategy preference record.
+
+Conceptually:
+
+```text
+strategy_preferences
+--------------------
+id
+task_type
+strategy_id
+score
+rank
+confidence
+sample_count
+reason
+updated_at
+```
+
+Example:
+
+```text
+task_type = calculation
+strategy = verify_calculation
+score = 0.95
+rank = 1
+confidence = high
+sample_count = 20
+```
+
+---
+
+# 19. Minimum Sample Requirement
+
+The system MUST NOT declare a strategy as definitively superior after a single execution.
+
+Introduce:
+
+```text
+STRATEGY_MIN_SAMPLES
+```
+
+Example:
+
+```text
+STRATEGY_MIN_SAMPLES=5
+```
+
+Until sufficient samples exist:
+
+```text
+Strategy status = insufficient_data
+```
+
+After sufficient data:
+
+```text
+Strategy status = evaluated
+```
+
+This prevents one lucky execution from permanently influencing strategy selection.
+
+---
+
+# 20. Cold Start
+
+The system must handle a new strategy with no history.
+
+Example:
+
+```text
+Strategy A
+samples = 20
+success = 95%
+
+Strategy B
+samples = 0
+```
+
+Strategy B must not automatically receive a poor score simply because it has no history.
+
+The system should use the exploration mechanism to collect evidence.
+
+---
+
+# 21. Strategy Learning Flow
+
+The complete flow should be:
+
+```text
+User Request
+      ↓
+Task Classification
+      ↓
+Retrieve Experiences
+      ↓
+Retrieve Lessons
+      ↓
+Retrieve Strategy Performance
+      ↓
+Strategy Selector
+      ↓
+Strategy
+      ↓
+Strategy Executor
+      ↓
+Main Agent
+      ↓
+Answer
+      ↓
+Evaluator
+      ↓
+Evaluation
+      ↓
+Strategy Performance Record
+      ↓
+Strategy Comparison
+      ↓
+Strategy Preference Update
+      ↓
+SQLite
+      ↓
+GraphQLite
+```
+
+---
+
+# 22. GraphQLite Integration
+
+Continue using GraphQLite as the relationship layer.
+
+Phase 4 should extend the Phase 3 graph.
+
+Core entities:
+
+```text
+Task
+Experience
+Evaluation
+Lesson
+Strategy
+StrategyExecution
+StrategyPreference
+```
+
+Relationships should conceptually include:
+
+```text
+Task
+  └── produces → Experience
+
+Experience
+  └── evaluated_by → Evaluation
+
+Evaluation
+  └── produces → Lesson
+
+Experience
+  └── used_strategy → Strategy
+
+Strategy
+  └── has_execution → StrategyExecution
+
+StrategyExecution
+  └── produced → Experience
+
+StrategyExecution
+  └── evaluated_by → Evaluation
+
+Task
+  └── preferred_strategy → Strategy
+```
+
+Use the actual supported GraphQLite API/version installed in the project.
+
+Do not create a custom graph implementation to replace GraphQLite.
+
+---
+
+# 23. sqlite-vec Integration
+
+Continue using sqlite-vec for semantic retrieval.
+
+Existing Phase 3 semantic memory must continue working.
+
+Strategy-related text MAY also be embedded.
+
+For example:
+
+```text
+Strategy:
+Verify calculation before answering.
+
+Task Type:
+calculation
+```
+
+Strategy embeddings can be used for future semantic strategy matching.
+
+However, semantic similarity MUST NOT replace historical strategy performance.
+
+Both may be used together.
+
+---
+
+# 24. Strategy Selection Scoring
+
+The initial scoring model should remain simple and explainable.
+
+Conceptually:
+
+```text
+Final Score =
+    Task Match
+    + Historical Success
+    + Quality
+    + Confidence
+    + Exploration Adjustment
+```
+
+The exact weights should be configuration-driven.
+
+Example:
+
+```text
+STRATEGY_WEIGHT_SUCCESS=0.50
+STRATEGY_WEIGHT_QUALITY=0.25
+STRATEGY_WEIGHT_CONFIDENCE=0.15
+STRATEGY_WEIGHT_SPEED=0.10
+```
+
+Correctness/success MUST have the highest importance.
+
+---
+
+# 25. No Self-Modifying Code
+
+Phase 4 MUST NOT modify:
+
+* Python source code
+* Agent source code
+* system prompts
+* strategy implementation code
+* database schema automatically
+* configuration files automatically
+
+The system only learns:
+
+```text
+which strategy appears better
+```
+
+It does not rewrite itself.
+
+---
+
+# 26. ADK Web Testing
+
+ADK Web remains the primary agent execution interface.
+
+Start:
+
+```bash
+uv run adk web
+```
+
+The user should be able to test Phase 4 using normal conversation.
+
+Example:
+
+```text
+What is 15% of 200?
+```
+
+The agent should solve the problem using the selected strategy.
+
+---
+
+# 27. Developer Test Commands
+
+Provide controlled developer test commands through the agent so Phase 4 can be tested from ADK Web.
+
+Recommended:
+
+```text
+/test-strategy
+```
+
+and:
+
+```text
+/test-strategy comparison
+```
+
+and:
+
+```text
+/test-strategy reset
+```
+
+The exact command design can be implemented according to ADK conventions.
+
+These commands are for development/testing and MUST NOT be required for normal agent usage.
+
+---
+
+# 28. Example ADK Web Test
+
+### First execution
+
+User:
+
+```text
+/test-strategy calculation
+```
+
+System:
+
+```text
+Task Type: calculation
+
+Available strategies:
+- direct_calculation
+- verify_calculation
+- step_by_step_calculation
+
+Selected:
+direct_calculation
+
+Result:
+successful
+
+Evaluation:
+good
+```
+
+The execution is stored.
+
+---
+
+# 29. Strategy Comparison Test
+
+Run enough controlled test executions.
+
+Example:
+
+```text
+/test-strategy comparison
+```
+
+Expected conceptual result:
+
+```text
+Strategy Performance
+
+direct_calculation
+Executions: 5
+Success Rate: 80%
+
+verify_calculation
+Executions: 5
+Success Rate: 100%
+
+step_by_step_calculation
+Executions: 5
+Success Rate: 90%
+
+Best Strategy:
+verify_calculation
+```
+
+---
+
+# 30. Future Selection Test
+
+Start a new ADK Web session.
+
+Ask:
+
+```text
+What is 25% of 400?
+```
+
+The system should identify:
+
+```text
+task_type = calculation
+```
+
+Then retrieve:
+
+```text
+strategy_preferences
+```
+
+and select:
+
+```text
+verify_calculation
+```
+
+The selected strategy should be recorded with the new experience.
+
+---
+
+# 31. Streamlit Developer UI
+
+Continue using Streamlit as a read-only developer/debugging application.
+
+Start:
+
+```bash
+uv run streamlit run developer_ui/app.py
+```
+
+Add the following views.
+
+### Existing Phase 3 views
+
+* Database Overview
+* Experiences
+* Evaluations
+* Lessons
+* Vector Search
+* Graph Relationships
+* Learning Trace
+* Memory Retrieval Trace
+
+### New Phase 4 views
+
+#### Strategy Registry
+
+Display:
+
+```text
+Strategy
+Task Type
+Description
+Enabled
+```
+
+#### Strategy Performance
+
+Display:
+
+```text
+Strategy
+Task Type
+Executions
+Success Rate
+Average Quality
+Average Confidence
+Average Duration
+```
+
+#### Strategy Comparison
+
+Display:
+
+```text
+Strategy A → 82%
+Strategy B → 95%
+Strategy C → 88%
+```
+
+#### Strategy Preferences
+
+Display:
+
+```text
+Task Type
+Preferred Strategy
+Score
+Rank
+Confidence
+Sample Count
+```
+
+#### Strategy Execution Trace
+
+Display:
+
+```text
+Request
+ ↓
+Task Classification
+ ↓
+Candidate Strategies
+ ↓
+Selected Strategy
+ ↓
+Execution
+ ↓
+Evaluation
+ ↓
+Performance Update
+```
+
+---
+
+# 32. Streamlit Safety
+
+Streamlit MUST remain read-only.
+
+It MUST NOT:
+
+* modify strategy performance
+* modify lessons
+* modify evaluations
+* execute the agent
+* change strategy preferences
+* delete database records
+
+Phase 4 developer UI is for inspection only.
+
+---
+
+# 33. Database Requirements
+
+SQLite remains the primary database.
+
+Add tables as necessary for:
+
+```text
+strategies
+strategy_executions
+strategy_performance
+strategy_preferences
+```
+
+The implementation should reuse Phase 2 and Phase 3 tables rather than duplicating existing information.
+
+Database initialization/migrations must be deterministic.
+
+---
+
+# 34. Configuration
+
+Extend `.env.example`.
+
+Example:
+
+```text
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3.2
+
+EMBEDDING_BASE_URL=http://localhost:11434
+EMBEDDING_MODEL=nomic-embed-text
+
+DATABASE_PATH=data/agent.db
+
+MEMORY_TOP_K=3
+MEMORY_SIMILARITY_THRESHOLD=<configured>
+
+LESSON_TOP_K=3
+LESSON_SIMILARITY_THRESHOLD=<configured>
+
+STRATEGY_MIN_SAMPLES=5
+STRATEGY_EXPLORATION_RATE=0.10
+
+STRATEGY_WEIGHT_SUCCESS=0.50
+STRATEGY_WEIGHT_QUALITY=0.25
+STRATEGY_WEIGHT_CONFIDENCE=0.15
+STRATEGY_WEIGHT_SPEED=0.10
+```
+
+All strategy-selection parameters should be configurable.
+
+---
+
+# 35. Error Isolation
+
+Strategy optimization MUST NOT break the main agent response.
+
+If:
+
+```text
+Strategy Selector fails
+```
+
+the system should fall back to:
+
+```text
+default strategy
+```
+
+If:
+
+```text
+Strategy Evaluation fails
+```
+
+the main answer should still be returned.
+
+If:
+
+```text
+Strategy Learning fails
+```
+
+the main answer and existing evaluation must remain available.
+
+If:
+
+```text
+GraphQLite operation fails
+```
+
+the main answer and SQLite records should remain available where possible.
+
+---
+
+# 36. Deterministic Testing
+
+The test suite MUST NOT depend entirely on Llama 3.2 producing predictable results.
+
+Use controlled test fixtures for:
+
+* strategy selection
+* strategy scoring
+* strategy comparison
+* performance calculation
+* preference calculation
+* exploration
+* cold start
+* minimum sample requirements
+
+LLM-based tests should be limited to integration scenarios.
+
+---
+
+# 37. Unit Tests
+
+Add tests for:
+
+### Strategy Registry
+
+```text
+test_strategy_registry_loads
+test_strategy_registry_contains_required_strategies
+test_disabled_strategy_is_not_selected
+```
+
+### Task Classification
+
+```text
+test_calculation_task_classification
+test_explanation_task_classification
+```
+
+### Strategy Selection
+
+```text
+test_best_strategy_selected
+test_unknown_strategy_is_not_selected
+test_cold_start_strategy
+test_exploration
+```
+
+### Scoring
+
+```text
+test_success_score
+test_quality_score
+test_confidence_score
+test_final_strategy_score
+```
+
+### Performance
+
+```text
+test_strategy_performance_storage
+test_success_rate_calculation
+test_average_quality
+test_average_duration
+```
+
+### Comparison
+
+```text
+test_strategy_comparison
+test_best_strategy_identification
+test_minimum_sample_requirement
+```
+
+### Preferences
+
+```text
+test_preference_creation
+test_preference_update
+test_preferred_strategy
+```
+
+---
+
+# 38. Integration Tests
+
+Integration tests should verify:
+
+```text
+Agent
+ ↓
+Strategy Selector
+ ↓
+Strategy Executor
+ ↓
+Evaluator
+ ↓
+Strategy Performance
+ ↓
+Strategy Preference
+ ↓
+SQLite
+```
+
+Also verify:
+
+```text
+SQLite
+ ↓
+GraphQLite
+```
+
+relationships.
+
+And:
+
+```text
+SQLite
+ ↓
+sqlite-vec
+ ↓
+strategy/lesson retrieval
+```
+
+---
+
+# 39. End-to-End Test
+
+The following must work:
+
+### Step 1
+
+Start:
+
+```bash
+uv run adk web
+```
+
+### Step 2
+
+Execute:
+
+```text
+What is 15% of 200?
+```
+
+### Step 3
+
+The agent:
+
+```text
+classifies task
+→ selects strategy
+→ executes strategy
+→ answers
+→ evaluates
+→ stores performance
+```
+
+### Step 4
+
+Repeat enough times to produce meaningful statistics.
+
+### Step 5
+
+Run:
+
+```text
+/test-strategy comparison
+```
+
+### Step 6
+
+Verify that the system identifies the best-performing strategy.
+
+### Step 7
+
+Start a new ADK Web session.
+
+Ask another calculation question.
+
+### Step 8
+
+Verify that the previously preferred strategy is selected.
+
+### Step 9
+
+Open Streamlit.
+
+Verify:
+
+```text
+Strategy Registry
+Strategy Performance
+Strategy Comparison
+Strategy Preference
+Strategy Execution Trace
+Graph Relationships
+```
+
+---
+
+# 40. Persistence Test
+
+Stop the application.
+
+Restart:
+
+```bash
+uv run adk web
+```
+
+Create a new session.
+
+Verify that strategy knowledge remains:
+
+```text
+strategy definitions
+strategy executions
+strategy performance
+strategy preferences
+```
+
+The information MUST survive application restart.
+
+---
+
+# 41. Phase 4 Acceptance Criteria
+
+Phase 4 is complete when all of the following are true:
+
+1. Multiple strategies can be registered.
+2. The system can classify a task.
+3. The system can select a strategy.
+4. The selected strategy is recorded.
+5. Strategy execution is recorded.
+6. The answer is evaluated.
+7. Strategy performance is persisted.
+8. Multiple strategies can be compared.
+9. The system can determine a preferred strategy.
+10. Minimum sample requirements are enforced.
+11. Cold-start strategies are supported.
+12. Exploration is supported.
+13. Future requests can use learned strategy preferences.
+14. Strategy information survives application restart.
+15. GraphQLite contains strategy relationships.
+16. Streamlit displays strategy information.
+17. ADK Web remains the primary agent interface.
+18. All tests pass.
+19. Strategy optimization failures do not break normal answers.
+20. No source code or prompt self-modification occurs.
+
+---
+
+# 42. Out of Scope
+
+The following MUST NOT be implemented in Phase 4:
+
+* Fine-tuning
+* Model training
+* Reinforcement learning algorithms
+* Automatic Python code modification
+* Automatic prompt rewriting
+* Automatic strategy-code generation
+* Cloud LLMs
+* Neo4j
+* PostgreSQL
+* Custom REST API
+* Custom agent chat UI
+* Blazor UI
+* Multi-agent orchestration
+* Distributed execution
+* Production-scale optimization
+* Autonomous deployment
+* Autonomous database schema modification
+
+These belong to future phases if required.
+
+---
+
+# 43. Phase 4 Target Architecture
+
+The target architecture is:
+
+```text
+                         ┌──────────────┐
+                         │   ADK Web    │
+                         └──────┬───────┘
+                                │
+                                ▼
+                         ┌──────────────┐
+                         │ Main Agent   │
+                         └──────┬───────┘
+                                │
+                  ┌─────────────┼─────────────┐
+                  ▼             ▼             ▼
+             Experience      Lessons      Strategy
+              Retrieval      Retrieval     Retrieval
+                  │             │             │
+                  └─────────────┼─────────────┘
+                                ▼
+                      ┌──────────────────┐
+                      │ Task Classifier  │
+                      └────────┬─────────┘
+                               │
+                               ▼
+                      ┌──────────────────┐
+                      │Strategy Selector │
+                      └────────┬─────────┘
+                               │
+                               ▼
+                      ┌──────────────────┐
+                      │Strategy Executor │
+                      └────────┬─────────┘
+                               │
+                               ▼
+                         ┌────────────┐
+                         │ Llama 3.2  │
+                         └─────┬──────┘
+                               │
+                               ▼
+                            Answer
+                               │
+                               ▼
+                         ┌────────────┐
+                         │ Evaluator  │
+                         └─────┬──────┘
+                               │
+                               ▼
+                    Strategy Performance
+                               │
+                    ┌──────────┴──────────┐
+                    ▼                     ▼
+             Strategy Comparison   Strategy Learning
+                    │                     │
+                    └──────────┬──────────┘
+                               ▼
+                      Strategy Preference
+                               │
+                 ┌─────────────┼─────────────┐
+                 ▼             ▼             ▼
+              SQLite       sqlite-vec    GraphQLite
+                 │             │             │
+                 └─────────────┼─────────────┘
+                               ▼
+                         Streamlit
+                       Developer UI
+```
+
+---
+
+# 44. Expected Phase 4 Behavior
+
+The important behavior to demonstrate is:
+
+```text
+FIRST REQUEST
+
+Task
+ ↓
+No historical strategy knowledge
+ ↓
+Explore available strategies
+ ↓
+Execute
+ ↓
+Evaluate
+ ↓
+Store result
+```
+
+After multiple requests:
+
+```text
+Historical Data
+
+Strategy A → 80%
+Strategy B → 95%
+Strategy C → 87%
+```
+
+Then:
+
+```text
+NEW REQUEST
+     ↓
+Task Type = calculation
+     ↓
+Strategy Selector
+     ↓
+Strategy B
+     ↓
+Execute
+     ↓
+Evaluate
+     ↓
+Update Strategy B statistics
+```
+
+Therefore the system has progressed from:
+
+```text
+"I remember what happened."
+```
+
+to:
+
+```text
+"I know what happened."
+```
+
+to:
+
+```text
+"I learned what worked better."
+```
+
+That is the primary objective of Phase 4.
+
+---
+
+# 45. Definition of Done
+
+Phase 4 is considered complete when the system can demonstrate the following complete lifecycle:
+
+```text
+                    USER
+                     │
+                     ▼
+                TASK REQUEST
+                     │
+                     ▼
+              TASK CLASSIFICATION
+                     │
+                     ▼
+             STRATEGY SELECTION
+                     │
+                     ▼
+              STRATEGY EXECUTION
+                     │
+                     ▼
+                  ANSWER
+                     │
+                     ▼
+                 EVALUATION
+                     │
+                     ▼
+           STRATEGY PERFORMANCE
+                     │
+                     ▼
+             STRATEGY COMPARISON
+                     │
+                     ▼
+             STRATEGY PREFERENCE
+                     │
+                     ▼
+               PERSISTENCE
+                     │
+                     ▼
+              FUTURE REQUEST
+                     │
+                     ▼
+          BETTER STRATEGY SELECTION
+```
+
+The implementation must remain simple, explainable, locally executable, testable, and compatible with the architecture established in Phases 1–3.
+
+Do not implement Phase 5 functionality as part of this phase.

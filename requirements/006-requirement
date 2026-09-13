@@ -1,0 +1,1781 @@
+# Phase 5 — Full Self-Improving Multi-Agent Architecture
+
+## 1. Document Purpose
+
+This document defines Phase 5 of the Self-Improving Agent POC.
+
+Phase 5 extends the Phase 4 system from:
+
+> **Select the best strategy**
+
+to:
+
+> **Coordinate multiple specialized agents, evaluate their work, learn from their performance, and improve future workflows.**
+
+The objective is to demonstrate a complete local self-improving multi-agent architecture using Google ADK 2.
+
+The system must remain:
+
+* Local-first
+* Modular
+* Deterministic where possible
+* Testable
+* Observable
+* Explainable
+* Safe
+* Compatible with the architecture created in Phases 1–4
+
+---
+
+# 2. Existing Technology Stack
+
+The implementation MUST continue using:
+
+* Python 3.11+
+* uv
+* Google ADK 2
+* ADK Web
+* LiteLLM
+* Llama 3.2
+* Ollama/local model endpoint
+* SQLite
+* sqlite-vec
+* GraphQLite
+* nomic-embed-text
+* Streamlit
+* pytest
+
+No cloud LLM is required.
+
+The existing local Llama 3.2 model should be reused.
+
+---
+
+# 3. Relationship With Previous Phases
+
+Phase 5 MUST build on all previous phases.
+
+### Phase 1
+
+```text
+Basic Agent
+```
+
+### Phase 2
+
+```text
+Basic Agent
++
+Persistent Semantic Memory
+```
+
+### Phase 3
+
+```text
+Memory
++
+Evaluation
++
+Learning
++
+Graph Relationships
+```
+
+### Phase 4
+
+```text
+Memory
++
+Evaluation
++
+Learning
++
+Strategy Optimization
+```
+
+### Phase 5
+
+```text
+Memory
++
+Evaluation
++
+Learning
++
+Strategy Optimization
++
+Multi-Agent Coordination
++
+Workflow Optimization
++
+Agent Performance Learning
+```
+
+---
+
+# 4. Phase 5 Goal
+
+The system must support multiple specialized agents with clearly defined responsibilities.
+
+The system MUST be able to:
+
+1. Receive a user request.
+2. Determine whether the task is simple or complex.
+3. Create a plan for complex tasks.
+4. Select appropriate agents.
+5. Select appropriate strategies.
+6. Retrieve relevant experiences and lessons.
+7. Execute the task through specialized agents.
+8. Evaluate intermediate and final results.
+9. Retry or improve when appropriate.
+10. Produce a final answer.
+11. Record agent performance.
+12. Record workflow performance.
+13. Learn which agent/workflow combinations work better.
+14. Use that knowledge for future tasks.
+
+---
+
+# 5. Target Architecture
+
+The target architecture is:
+
+```text
+                         ┌──────────────┐
+                         │    ADK Web   │
+                         └──────┬───────┘
+                                │
+                                ▼
+                       ┌────────────────┐
+                       │  Orchestrator  │
+                       └───────┬────────┘
+                               │
+                               ▼
+                         ┌───────────┐
+                         │  Planner  │
+                         └─────┬─────┘
+                               │
+                    ┌──────────┼──────────┐
+                    ▼          ▼          ▼
+               Retrieval    Strategy    Specialist
+                 Agent        Agent       Agents
+                    │          │          │
+                    └──────────┼──────────┘
+                               ▼
+                         ┌──────────┐
+                         │  Solver  │
+                         │   Agent  │
+                         └────┬─────┘
+                              │
+                              ▼
+                         ┌──────────┐
+                         │  Critic  │
+                         │   Agent  │
+                         └────┬─────┘
+                              │
+                   ┌──────────┴──────────┐
+                   ▼                     ▼
+                Accept                Improve
+                   │                     │
+                   │                     ▼
+                   │                Improvement
+                   │                   Agent
+                   │                     │
+                   │                     ▼
+                   │                  Retry
+                   │                     │
+                   └──────────┬──────────┘
+                              ▼
+                       ┌─────────────┐
+                       │Final Answer │
+                       └──────┬──────┘
+                              │
+                              ▼
+                  ┌──────────────────────┐
+                  │ Evaluation + Learning│
+                  └──────────┬───────────┘
+                             │
+                             ▼
+                SQLite + sqlite-vec + GraphQLite
+                             │
+                             ▼
+                       Streamlit UI
+```
+
+---
+
+# 6. Agent Roles
+
+Phase 5 MUST introduce specialized logical agents.
+
+Each agent MUST have a clearly defined responsibility.
+
+The initial implementation should contain the following agents.
+
+---
+
+# 7. Orchestrator Agent
+
+The Orchestrator is the top-level coordinator.
+
+Responsibilities:
+
+* Receive the user request.
+* Determine whether the task requires multiple agents.
+* Start the appropriate workflow.
+* Coordinate agent execution.
+* Collect agent results.
+* Handle failures.
+* Send results to the evaluator.
+* Request retry/improvement when necessary.
+* Produce or request the final answer.
+
+The Orchestrator MUST NOT perform every task itself.
+
+It coordinates other agents.
+
+---
+
+# 8. Planner Agent
+
+The Planner is responsible for breaking complex requests into smaller tasks.
+
+Example:
+
+```text
+User:
+Explain how a microservice order system should be designed.
+
+Planner:
+
+1. Identify business requirements
+2. Identify services
+3. Define communication
+4. Define data ownership
+5. Define scaling approach
+6. Produce architecture
+7. Validate architecture
+```
+
+The Planner should produce a structured plan.
+
+Example:
+
+```json
+{
+  "task_type": "architecture",
+  "steps": [
+    {
+      "id": 1,
+      "description": "Identify requirements"
+    },
+    {
+      "id": 2,
+      "description": "Define services"
+    },
+    {
+      "id": 3,
+      "description": "Define communication"
+    }
+  ]
+}
+```
+
+---
+
+# 9. Retrieval Agent
+
+The Retrieval Agent is responsible for finding relevant information from persistent memory.
+
+It should search:
+
+* Experiences
+* Lessons
+* Strategy history
+* Relevant graph relationships
+
+Data sources:
+
+```text
+SQLite
+sqlite-vec
+GraphQLite
+```
+
+The Retrieval Agent MUST return structured evidence.
+
+Example:
+
+```json
+{
+  "experiences": [],
+  "lessons": [],
+  "strategies": [],
+  "relationships": []
+}
+```
+
+The Retrieval Agent MUST NOT invent information.
+
+---
+
+# 10. Strategy Agent
+
+The Strategy Agent builds on Phase 4.
+
+Responsibilities:
+
+* Identify candidate strategies.
+* Retrieve historical strategy performance.
+* Select a strategy.
+* Explain the selection.
+* Provide the selected strategy to the Solver.
+
+Example:
+
+```text
+Task Type:
+architecture
+
+Candidate Strategies:
+- direct_analysis
+- structured_analysis
+- compare_alternatives
+
+Selected:
+structured_analysis
+
+Reason:
+Historical performance is highest for architecture tasks.
+```
+
+---
+
+# 11. Solver Agent
+
+The Solver Agent performs the actual task.
+
+It receives:
+
+```text
+User Task
++
+Plan
++
+Retrieved Memory
++
+Relevant Lessons
++
+Selected Strategy
+```
+
+It produces:
+
+```text
+Answer
++
+Execution Metadata
+```
+
+The Solver should not be responsible for evaluating itself.
+
+---
+
+# 12. Critic / Evaluator Agent
+
+The Critic evaluates the Solver's result.
+
+It should evaluate:
+
+```text
+correctness
+quality
+completeness
+confidence
+strategy effectiveness
+```
+
+Example:
+
+```json
+{
+  "correct": true,
+  "quality": "good",
+  "completeness": "good",
+  "confidence": "high",
+  "strategy_effectiveness": "good",
+  "reason": "The solution addresses all requested architecture concerns."
+}
+```
+
+The existing Phase 3 Evaluator should be reused and extended rather than duplicated.
+
+---
+
+# 13. Improvement Agent
+
+The Improvement Agent is responsible for deciding what should happen when the result is inadequate.
+
+It can:
+
+* Identify missing information.
+* Identify reasoning problems.
+* Request additional retrieval.
+* Request a different strategy.
+* Request a retry.
+* Request a different specialist agent.
+* Produce improvement guidance.
+
+Example:
+
+```text
+Critic:
+Answer incomplete.
+
+Improvement Agent:
+Missing database scaling analysis.
+
+Action:
+Request Solver retry using strategy:
+structured_analysis
+```
+
+---
+
+# 14. Final Answer Agent
+
+For complex workflows, a final answer stage should combine validated results.
+
+The Final Answer Agent receives:
+
+```text
+Original Request
+Plan
+Agent Results
+Critic Results
+Improvement Results
+Relevant Evidence
+```
+
+It produces the final user-facing response.
+
+The final response should be clear and should not expose unnecessary internal implementation details.
+
+---
+
+# 15. Logical Agent vs Physical Model
+
+All logical agents MAY use the same Llama 3.2 model.
+
+Example:
+
+```text
+Orchestrator → Llama 3.2
+Planner      → Llama 3.2
+Retrieval    → deterministic code + embeddings
+Strategy     → deterministic logic + Llama 3.2 where required
+Solver       → Llama 3.2
+Critic       → Llama 3.2
+Improvement  → Llama 3.2
+Final Answer → Llama 3.2
+```
+
+The architecture should treat these as separate logical roles.
+
+Do not require separate models.
+
+---
+
+# 16. Structured Agent Communication
+
+Agents MUST communicate using structured objects.
+
+Do not pass large unstructured conversational strings between agents where a structured object is appropriate.
+
+Examples:
+
+```text
+Task
+QueryPlan
+RetrievalResult
+StrategySelection
+AgentResult
+Evaluation
+ImprovementRequest
+FinalResult
+```
+
+Example:
+
+```json
+{
+  "agent": "planner",
+  "status": "success",
+  "result": {},
+  "confidence": "high",
+  "created_at": "..."
+}
+```
+
+---
+
+# 17. Agent Result Contract
+
+Every agent should return a standard result structure.
+
+Minimum fields:
+
+```text
+agent_id
+task_id
+status
+result
+confidence
+reason
+duration_ms
+created_at
+```
+
+Status values:
+
+```text
+success
+failed
+partial
+skipped
+```
+
+This makes the system observable and testable.
+
+---
+
+# 18. Workflow Controller
+
+The system MUST have a deterministic workflow controller.
+
+The workflow controller decides the execution order.
+
+Example:
+
+```text
+Orchestrator
+ ↓
+Planner
+ ↓
+Retrieval
+ ↓
+Strategy
+ ↓
+Solver
+ ↓
+Critic
+ ↓
+Improvement if required
+ ↓
+Final Answer
+```
+
+The LLM should not have unlimited control over workflow execution.
+
+This prevents:
+
+* infinite loops
+* uncontrolled agent calls
+* excessive token usage
+* unpredictable execution
+
+---
+
+# 19. Maximum Agent Steps
+
+Introduce:
+
+```text
+MAX_AGENT_STEPS
+```
+
+Example:
+
+```text
+MAX_AGENT_STEPS=10
+```
+
+The workflow MUST stop when the maximum number of agent steps is reached.
+
+If the workflow cannot produce a validated answer, return a controlled failure/partial result.
+
+---
+
+# 20. Retry Policy
+
+The system should support controlled retries.
+
+Example:
+
+```text
+MAX_RETRIES=2
+```
+
+A retry should only happen when:
+
+* Critic identifies a meaningful problem.
+* Improvement Agent provides a valid improvement action.
+* Retry limit has not been reached.
+
+The system MUST NOT retry indefinitely.
+
+---
+
+# 21. Agent Selection
+
+The Orchestrator should not always invoke every agent.
+
+For a simple task:
+
+```text
+What is 10 + 20?
+```
+
+Possible workflow:
+
+```text
+Orchestrator
+ ↓
+Solver
+ ↓
+Evaluator
+ ↓
+Answer
+```
+
+For a complex task:
+
+```text
+Design an order management architecture.
+```
+
+Possible workflow:
+
+```text
+Orchestrator
+ ↓
+Planner
+ ↓
+Retrieval
+ ↓
+Strategy
+ ↓
+Solver
+ ↓
+Critic
+ ↓
+Improvement
+ ↓
+Solver
+ ↓
+Final Answer
+```
+
+The system should therefore support dynamic but controlled workflow selection.
+
+---
+
+# 22. Simple vs Complex Task
+
+Introduce task complexity classification.
+
+Possible values:
+
+```text
+simple
+moderate
+complex
+```
+
+Example:
+
+```text
+"What is 15% of 200?"
+→ simple
+
+"Explain REST vs GraphQL."
+→ moderate
+
+"Design a scalable microservice architecture for an order system."
+→ complex
+```
+
+Simple requests should avoid unnecessary multi-agent execution.
+
+---
+
+# 23. Shared Memory
+
+All agents should be able to use the persistent memory layer.
+
+The memory consists of:
+
+```text
+Experiences
+Evaluations
+Lessons
+Strategies
+Strategy Performance
+Agent Performance
+Workflow Performance
+```
+
+The memory architecture remains:
+
+```text
+SQLite
+   +
+sqlite-vec
+   +
+GraphQLite
+```
+
+---
+
+# 24. Agent Performance Learning
+
+Phase 5 introduces learning about agents themselves.
+
+The system should track:
+
+```text
+agent_id
+task_type
+success
+quality
+confidence
+duration
+failure_count
+created_at
+```
+
+Example:
+
+```text
+Solver Agent
+Architecture Tasks
+Success Rate: 91%
+
+Critic Agent
+Architecture Tasks
+Validation Accuracy: 94%
+```
+
+---
+
+# 25. Workflow Performance
+
+The system should also track workflow performance.
+
+Example:
+
+```text
+Workflow A:
+Planner → Solver → Critic
+
+Success:
+82%
+
+Workflow B:
+Retrieval → Planner → Strategy → Solver → Critic
+
+Success:
+94%
+```
+
+The system can learn that Workflow B works better for complex architecture tasks.
+
+---
+
+# 26. Workflow Optimization
+
+Build on Phase 4 strategy optimization.
+
+Phase 4 learns:
+
+```text
+Which strategy works best?
+```
+
+Phase 5 learns:
+
+```text
+Which workflow + agents + strategy combination works best?
+```
+
+Example:
+
+```text
+Task Type:
+architecture
+
+Best Workflow:
+Planner
+→ Retrieval
+→ Strategy
+→ Solver
+→ Critic
+
+Best Strategy:
+structured_analysis
+```
+
+This should be stored as learned workflow knowledge.
+
+---
+
+# 27. Self-Improvement Loop
+
+The complete learning loop is:
+
+```text
+Task
+ ↓
+Workflow Selection
+ ↓
+Agent Execution
+ ↓
+Answer
+ ↓
+Evaluation
+ ↓
+Agent Performance Update
+ ↓
+Strategy Performance Update
+ ↓
+Workflow Performance Update
+ ↓
+Learning
+ ↓
+Future Workflow Selection
+```
+
+This creates controlled self-improvement.
+
+---
+
+# 28. GraphQLite Model
+
+Extend the Phase 4 graph.
+
+Entities:
+
+```text
+Task
+Experience
+Evaluation
+Lesson
+Strategy
+StrategyExecution
+StrategyPreference
+Agent
+AgentExecution
+Workflow
+WorkflowExecution
+WorkflowPreference
+```
+
+Relationships should conceptually include:
+
+```text
+Task
+ ├── produces → Experience
+ ├── uses → Workflow
+ └── preferred_workflow → Workflow
+
+Workflow
+ ├── contains → Agent
+ └── uses_strategy → Strategy
+
+Agent
+ └── executed → AgentExecution
+
+AgentExecution
+ ├── produced → Experience
+ └── evaluated_by → Evaluation
+
+Strategy
+ └── executed_by → StrategyExecution
+
+WorkflowExecution
+ ├── contains → AgentExecution
+ ├── evaluated_by → Evaluation
+ └── produced → Experience
+
+Evaluation
+ └── produces → Lesson
+```
+
+Use the actual GraphQLite API/version available in the project.
+
+Do not implement a replacement graph engine.
+
+---
+
+# 29. sqlite-vec Usage
+
+sqlite-vec continues to provide semantic retrieval.
+
+The system should be able to retrieve:
+
+```text
+similar experiences
+similar lessons
+similar tasks
+similar strategies
+similar workflows
+```
+
+Semantic retrieval should complement structured and graph retrieval.
+
+It must not blindly replace deterministic queries.
+
+---
+
+# 30. Context Builder
+
+Introduce a Context Builder responsible for assembling relevant information for an agent.
+
+Example:
+
+```text
+User Task
++
+Task Classification
++
+Plan
++
+Relevant Experiences
++
+Relevant Lessons
++
+Strategy
++
+Workflow
++
+Agent Instructions
+```
+
+The Context Builder should:
+
+* Limit context size.
+* Remove irrelevant results.
+* Preserve source information.
+* Avoid duplicate information.
+* Provide structured context.
+
+---
+
+# 31. Evidence Tracking
+
+Each important result should retain its source.
+
+Example:
+
+```text
+Evidence:
+Experience #123
+
+Lesson:
+Lesson #27
+
+Strategy:
+verify_calculation
+
+Evaluation:
+Evaluation #91
+```
+
+The system should be able to explain why a strategy/workflow was selected.
+
+---
+
+# 32. Failure Handling
+
+An individual agent failure MUST NOT automatically crash the entire system.
+
+Example:
+
+```text
+Retrieval Agent
+      ↓
+    FAILED
+      ↓
+Orchestrator
+      ↓
+Fallback
+      ↓
+Continue with reduced context
+```
+
+The failure should be recorded.
+
+The final answer should indicate limitations when they materially affect reliability.
+
+---
+
+# 33. Agent Timeout
+
+Each agent execution should have a configurable timeout.
+
+Example:
+
+```text
+AGENT_TIMEOUT_SECONDS=30
+```
+
+A timed-out agent should return:
+
+```text
+status = failed
+```
+
+The workflow controller decides whether to:
+
+* retry
+* skip
+* use fallback
+* terminate
+
+---
+
+# 34. No Infinite Self-Improvement
+
+The system MUST NOT continuously call itself to improve without a user task.
+
+Every self-improvement cycle must originate from an actual task execution or an explicit developer test.
+
+The system MUST NOT:
+
+```text
+learn
+→ improve
+→ execute
+→ learn
+→ improve
+→ execute
+```
+
+forever.
+
+---
+
+# 35. No Source-Code Self-Modification
+
+Phase 5 MUST NOT automatically modify:
+
+* Python source code
+* Agent source code
+* Prompts
+* Strategy implementation
+* Workflow implementation
+* Database schema
+* Docker configuration
+* Deployment configuration
+
+The system learns through persistent data.
+
+Source-code modification is explicitly out of scope.
+
+---
+
+# 36. ADK Web
+
+ADK Web remains the ONLY primary agent/chat interface.
+
+Start:
+
+```bash
+uv run adk web
+```
+
+The user should be able to interact with the complete multi-agent system through ADK Web.
+
+No custom chat UI should be introduced.
+
+No custom REST chat API should be introduced.
+
+---
+
+# 37. Developer Test Commands
+
+Provide controlled developer commands through ADK Web.
+
+Recommended:
+
+```text
+/test-agent
+```
+
+```text
+/test-workflow
+```
+
+```text
+/test-multi-agent
+```
+
+```text
+/test-learning
+```
+
+These commands are for development/testing.
+
+Normal users should not need them.
+
+---
+
+# 38. Example ADK Web Test
+
+User:
+
+```text
+/test-multi-agent
+```
+
+Expected conceptual execution:
+
+```text
+Orchestrator
+ ↓
+Planner
+ ↓
+Retrieval
+ ↓
+Strategy
+ ↓
+Solver
+ ↓
+Critic
+ ↓
+Final Answer
+```
+
+ADK Web should return a concise result such as:
+
+```text
+Multi-agent test completed.
+
+Agents executed:
+Orchestrator
+Planner
+Retrieval
+Strategy
+Solver
+Critic
+
+Final status:
+success
+
+Evaluation:
+good
+```
+
+Detailed execution information should be visible in Streamlit.
+
+---
+
+# 39. Example Complex Task
+
+User:
+
+```text
+Design a simple scalable order management architecture.
+```
+
+Expected workflow:
+
+```text
+Orchestrator
+ ↓
+Classify = complex
+ ↓
+Planner
+ ↓
+Retrieval Agent
+ ↓
+Strategy Agent
+ ↓
+Solver Agent
+ ↓
+Critic Agent
+ ↓
+Improvement Agent if required
+ ↓
+Final Answer Agent
+ ↓
+Evaluation
+ ↓
+Learning
+```
+
+---
+
+# 40. Example Simple Task
+
+User:
+
+```text
+What is 15% of 200?
+```
+
+Expected workflow:
+
+```text
+Orchestrator
+ ↓
+Classify = simple
+ ↓
+Solver
+ ↓
+Evaluator
+ ↓
+Final Answer
+```
+
+The system should not unnecessarily invoke all agents.
+
+---
+
+# 41. Streamlit Developer UI
+
+Streamlit remains a read-only developer tool.
+
+Add Phase 5 views:
+
+### Agent Registry
+
+```text
+Agent
+Role
+Enabled
+```
+
+### Agent Executions
+
+```text
+Task
+Agent
+Status
+Duration
+Confidence
+```
+
+### Agent Performance
+
+```text
+Agent
+Task Type
+Executions
+Success Rate
+Average Quality
+Average Duration
+```
+
+### Workflow Registry
+
+```text
+Workflow
+Task Type
+Agents
+Strategy
+Enabled
+```
+
+### Workflow Performance
+
+```text
+Workflow
+Executions
+Success Rate
+Quality
+Average Duration
+```
+
+### Workflow Preferences
+
+```text
+Task Type
+Preferred Workflow
+Score
+Confidence
+Sample Count
+```
+
+### Multi-Agent Execution Trace
+
+```text
+User
+ ↓
+Orchestrator
+ ↓
+Planner
+ ↓
+Retrieval
+ ↓
+Strategy
+ ↓
+Solver
+ ↓
+Critic
+ ↓
+Improvement
+ ↓
+Final Answer
+```
+
+---
+
+# 42. Graph Visualization
+
+Streamlit should provide a graph relationship explorer.
+
+Example:
+
+```text
+Task
+ │
+ └── uses
+      ↓
+ Workflow
+ ├── contains → Planner
+ ├── contains → Retrieval
+ ├── contains → Solver
+ └── contains → Critic
+             │
+             ↓
+         Evaluation
+             │
+             ↓
+           Lesson
+```
+
+The graph must reflect actual GraphQLite data.
+
+Do not create a fake visualization disconnected from the database.
+
+---
+
+# 43. Database Requirements
+
+SQLite remains the primary database.
+
+Additional tables may include:
+
+```text
+agents
+agent_executions
+workflows
+workflow_executions
+workflow_preferences
+```
+
+Reuse existing Phase 2–4 tables.
+
+Do not duplicate existing:
+
+* experiences
+* evaluations
+* lessons
+* strategies
+* strategy performance
+
+---
+
+# 44. Configuration
+
+Extend `.env.example`:
+
+```text
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3.2
+
+EMBEDDING_BASE_URL=http://localhost:11434
+EMBEDDING_MODEL=nomic-embed-text
+
+DATABASE_PATH=data/agent.db
+
+MEMORY_TOP_K=3
+MEMORY_SIMILARITY_THRESHOLD=<configured>
+
+LESSON_TOP_K=3
+LESSON_SIMILARITY_THRESHOLD=<configured>
+
+STRATEGY_MIN_SAMPLES=5
+STRATEGY_EXPLORATION_RATE=0.10
+
+MAX_AGENT_STEPS=10
+MAX_RETRIES=2
+AGENT_TIMEOUT_SECONDS=30
+
+WORKFLOW_MIN_SAMPLES=5
+WORKFLOW_EXPLORATION_RATE=0.10
+```
+
+---
+
+# 45. Testing Strategy
+
+Phase 5 must have four testing levels.
+
+## Unit Tests
+
+Test:
+
+* Agent registry
+* Workflow registry
+* Agent selection
+* Workflow selection
+* Task classification
+* Agent result contracts
+* Retry logic
+* Timeout handling
+* Step limits
+* Performance calculations
+* Workflow scoring
+
+## Integration Tests
+
+Test:
+
+```text
+Orchestrator
+ ↓
+Planner
+ ↓
+Retrieval
+ ↓
+Strategy
+ ↓
+Solver
+ ↓
+Evaluator
+```
+
+## Persistence Tests
+
+Verify:
+
+```text
+Agent performance
+Workflow performance
+Strategy performance
+Lessons
+Experiences
+Evaluations
+```
+
+survive restart.
+
+## End-to-End Tests
+
+Run through ADK Web.
+
+---
+
+# 46. Required End-to-End Test
+
+The complete test must demonstrate:
+
+```text
+User Request
+ ↓
+Orchestrator
+ ↓
+Planner
+ ↓
+Retrieval
+ ↓
+Strategy Selection
+ ↓
+Solver
+ ↓
+Critic
+ ↓
+Improvement if needed
+ ↓
+Final Answer
+ ↓
+Evaluation
+ ↓
+Agent Performance
+ ↓
+Strategy Performance
+ ↓
+Workflow Performance
+ ↓
+Learning
+```
+
+Then start a new ADK Web session.
+
+Submit a similar request.
+
+The system should use the learned workflow/strategy information.
+
+---
+
+# 47. Self-Improvement Demonstration
+
+The final demonstration should show the following progression.
+
+### Initial state
+
+```text
+No workflow history
+```
+
+System explores:
+
+```text
+Workflow A
+Workflow B
+```
+
+### After execution
+
+```text
+Workflow A
+Success = 80%
+
+Workflow B
+Success = 95%
+```
+
+### Learned preference
+
+```text
+Task Type = architecture
+
+Preferred Workflow = Workflow B
+```
+
+### Future task
+
+```text
+User
+ ↓
+Task Type = architecture
+ ↓
+Workflow Selector
+ ↓
+Workflow B
+```
+
+This demonstrates that the system has learned from experience.
+
+---
+
+# 48. Safety and Control Requirements
+
+The multi-agent system MUST have:
+
+* Maximum agent steps
+* Maximum retries
+* Agent timeout
+* Workflow timeout
+* Controlled strategy selection
+* Controlled workflow selection
+* Persistent execution logs
+* Error isolation
+* No infinite loops
+* No autonomous source-code modification
+
+---
+
+# 49. Performance Requirements
+
+The POC should prioritize correctness and reliability over raw speed.
+
+The system should avoid unnecessary agent calls.
+
+For simple requests:
+
+```text
+Prefer:
+Orchestrator → Solver → Evaluator
+```
+
+For complex requests:
+
+```text
+Use:
+Planner → Retrieval → Strategy → Solver → Critic
+```
+
+Additional agents should only be invoked when necessary.
+
+---
+
+# 50. Out of Scope
+
+The following are explicitly out of scope:
+
+* Autonomous source-code modification
+* Automatic prompt rewriting
+* Model fine-tuning
+* Model training
+* Reinforcement learning frameworks
+* Cloud LLMs
+* Neo4j
+* PostgreSQL
+* Kubernetes
+* Distributed agent execution
+* Production authentication
+* Multi-user production deployment
+* Autonomous deployment
+* Autonomous infrastructure modification
+* Autonomous database schema modification
+* Infinite self-improvement loops
+* Fully autonomous agents without workflow limits
+
+---
+
+# 51. Final Architecture
+
+The final Phase 5 architecture should be:
+
+```text
+                         ┌───────────────┐
+                         │    ADK Web    │
+                         └───────┬───────┘
+                                 │
+                                 ▼
+                        ┌────────────────┐
+                        │  Orchestrator  │
+                        └───────┬────────┘
+                                │
+                         ┌──────▼──────┐
+                         │   Planner   │
+                         └──────┬──────┘
+                                │
+               ┌────────────────┼────────────────┐
+               ▼                ▼                ▼
+        Retrieval Agent   Strategy Agent   Agent Selection
+               │                │                │
+               └────────────────┼────────────────┘
+                                ▼
+                         ┌────────────┐
+                         │   Solver   │
+                         └─────┬──────┘
+                               │
+                               ▼
+                         ┌────────────┐
+                         │   Critic   │
+                         └─────┬──────┘
+                               │
+                         ┌─────▼──────┐
+                         │ Improvement│
+                         └─────┬──────┘
+                               │
+                         Retry if needed
+                               │
+                               ▼
+                      ┌─────────────────┐
+                      │  Final Answer   │
+                      └────────┬────────┘
+                               │
+                               ▼
+                         ┌────────────┐
+                         │ Evaluation │
+                         └─────┬──────┘
+                               │
+              ┌────────────────┼────────────────┐
+              ▼                ▼                ▼
+         Agent Learning   Strategy Learning  Workflow Learning
+              │                │                │
+              └────────────────┼────────────────┘
+                               ▼
+                    ┌─────────────────────┐
+                    │ Persistent Memory   │
+                    │                     │
+                    │ SQLite              │
+                    │ sqlite-vec          │
+                    │ GraphQLite          │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                         ┌───────────┐
+                         │ Streamlit │
+                         │ Developer │
+                         │    UI     │
+                         └───────────┘
+```
+
+---
+
+# 52. Definition of Done
+
+Phase 5 is complete when:
+
+1. Multiple specialized agents exist.
+2. The Orchestrator can coordinate agents.
+3. The Planner can create structured plans.
+4. The Retrieval Agent can retrieve persistent knowledge.
+5. The Strategy Agent uses Phase 4 strategy knowledge.
+6. The Solver can execute the selected workflow.
+7. The Critic evaluates results.
+8. The Improvement Agent can request controlled improvement.
+9. The system supports retries.
+10. Maximum agent steps are enforced.
+11. Agent failures are isolated.
+12. Agent performance is recorded.
+13. Workflow performance is recorded.
+14. Strategy performance continues to work.
+15. Workflow preferences can be learned.
+16. Future requests can use learned workflow preferences.
+17. Experiences, evaluations, lessons, strategies, agents and workflows are persisted.
+18. GraphQLite contains the corresponding relationships.
+19. sqlite-vec supports semantic retrieval.
+20. ADK Web is the primary interaction interface.
+21. Streamlit provides read-only developer observability.
+22. All automated tests pass.
+23. The system survives application restart.
+24. The system demonstrates measurable improvement between initial and later executions.
+25. The system does not modify its own source code.
+26. The system cannot enter an uncontrolled self-improvement loop.
+
+---
+
+# 53. Final POC Objective
+
+At the end of Phase 5, the POC should demonstrate:
+
+```text
+Phase 1
+I can solve a problem.
+
+        ↓
+
+Phase 2
+I can remember previous problems.
+
+        ↓
+
+Phase 3
+I can evaluate my work and learn lessons.
+
+        ↓
+
+Phase 4
+I can learn which strategies work better.
+
+        ↓
+
+Phase 5
+I can coordinate specialized agents,
+evaluate their workflows,
+learn what works better,
+and use that knowledge on future tasks.
+```
+
+The final system is therefore a:
+
+> **Local, memory-enabled, evaluated, strategy-aware, multi-agent, self-improving system.**
+
+The self-improvement is controlled through persistent knowledge, evaluation, strategy optimization, workflow optimization, and agent performance learning rather than autonomous source-code modification.

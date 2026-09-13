@@ -1,0 +1,1407 @@
+# Phase 2 — Persistent Semantic Memory + Developer Visualization
+
+## 1. Objective
+
+The objective of Phase 2 is to add **persistent semantic memory** to the Phase 1 Google ADK agent.
+
+The agent must be able to:
+
+1. Receive a user request through ADK Web.
+2. Generate an embedding for the request using `nomic-embed-text`.
+3. Search previously stored experiences using SQLite + sqlite-vec.
+4. Retrieve semantically similar past experiences.
+5. Provide relevant memories to the Llama 3.2 model as context.
+6. Generate the current response.
+7. Store the new request and response as a persistent experience.
+8. Allow the developer to inspect the SQLite database and vector data through a simple Streamlit application.
+
+Phase 2 is about **memory only**.
+
+The system must NOT attempt to evaluate whether an answer is correct or automatically improve its strategy yet. Those capabilities belong to Phase 3 and later.
+
+---
+
+# 2. Scope
+
+### In Scope
+
+* SQLite persistent storage
+* sqlite-vec vector storage/search
+* `nomic-embed-text` embeddings
+* Semantic similarity search
+* Persistent experiences
+* Memory retrieval
+* Memory context construction
+* Memory persistence
+* New-session memory retrieval
+* Basic memory logging
+* Streamlit developer visualization
+* SQLite database explorer
+* Vector data visualization
+* Semantic search visualization
+* Memory retrieval trace
+* Automated tests
+* Manual validation through ADK Web
+
+### Out of Scope
+
+The following must NOT be implemented in Phase 2:
+
+* Self-evaluation
+* Critic agent
+* Learner agent
+* Strategy optimization
+* Automatic strategy selection
+* Reinforcement learning
+* Multi-agent architecture
+* Graph-based learning
+* Neo4j
+* PostgreSQL
+* Cloud LLM
+* Custom production web UI
+* Custom REST API
+* Custom chat UI
+* Autonomous agent improvement
+
+GraphQLite may remain installed/validated from Phase 0, but it is **not required in the main Phase 2 memory workflow**. Graph relationships will be introduced in Phase 3.
+
+---
+
+# 3. Phase 2 Architecture
+
+The architecture should be:
+
+```text
+                         ┌─────────────────────┐
+                         │      ADK Web        │
+                         │   Agent Chat UI     │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │     ADK Agent       │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │   Memory Retrieval  │
+                         └──────────┬──────────┘
+                                    │
+                         ┌──────────┴──────────┐
+                         ▼                     ▼
+                ┌─────────────────┐   ┌──────────────────┐
+                │ nomic-embed-text│   │    SQLite        │
+                │ Generate Vector │   │   experiences    │
+                └────────┬────────┘   └────────┬─────────┘
+                         │                     │
+                         └──────────┬──────────┘
+                                    ▼
+                              ┌────────────┐
+                              │ sqlite-vec │
+                              │ Vector     │
+                              │ Search     │
+                              └─────┬──────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │ Relevant Memories   │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │ Context Builder     │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │     Llama 3.2       │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                              Final Response
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │ Memory Persistence  │
+                         └─────────────────────┘
+
+
+Developer Visualization:
+
+                         ┌─────────────────────┐
+                         │     Streamlit       │
+                         │ Developer UI        │
+                         └──────────┬──────────┘
+                                    │
+                             READ ONLY
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │     SQLite DB       │
+                         │     sqlite-vec      │
+                         └─────────────────────┘
+```
+
+---
+
+# 4. User Interface Rules
+
+The system has two interfaces.
+
+## 4.1 ADK Web
+
+ADK Web is the **only agent execution and chat interface**.
+
+The user interacts with the agent through:
+
+```text
+adk web
+```
+
+Do not create:
+
+* Custom chat UI
+* Streamlit chat interface
+* Custom React UI
+* Blazor UI
+* REST chat endpoint
+* CLI-based chat application
+
+---
+
+## 4.2 Streamlit
+
+Streamlit is a **developer-only visualization and debugging application**.
+
+Its purpose is to allow the developer to understand:
+
+* What is stored in SQLite
+* What vectors are stored
+* What semantic search returns
+* Which memories were retrieved
+* How similarity search works
+* How the memory system changes over time
+
+Streamlit must NOT become the primary agent interface.
+
+Streamlit should be read-only in Phase 2.
+
+---
+
+# 5. Memory Concept
+
+The system should introduce the concept of an **Experience**.
+
+An experience represents a previous interaction with the agent.
+
+Example:
+
+```text
+Task:
+Calculate 15% of 200.
+
+Response:
+30
+
+Created:
+2026-09-12 21:30
+```
+
+The experience is stored permanently.
+
+Later, when the user asks:
+
+```text
+Calculate 20% of 500.
+```
+
+The system generates an embedding for the new request and searches the previous experiences.
+
+It may find:
+
+```text
+Calculate 15% of 200.
+```
+
+The previous experience is then supplied to the agent as contextual memory.
+
+The agent must still solve the current request independently.
+
+---
+
+# 6. Memory Data Model
+
+The primary source of truth must be a normal SQLite table.
+
+Use a table conceptually similar to:
+
+```text
+experiences
+-----------------------------
+id
+task_text
+task_type
+response_text
+status
+metadata_json
+created_at
+```
+
+### Required fields
+
+#### id
+
+Unique identifier for the experience.
+
+#### task_text
+
+The original user request.
+
+#### task_type
+
+Optional classification of the task.
+
+For Phase 2, this can be a simple value such as:
+
+```text
+general
+```
+
+Do not introduce a complex classification system.
+
+#### response_text
+
+The agent's final response.
+
+#### status
+
+Indicates whether the execution completed successfully.
+
+Example:
+
+```text
+success
+error
+```
+
+Phase 2 must NOT interpret `success` as "the answer is mathematically or semantically correct."
+
+It only means the execution completed successfully.
+
+#### metadata_json
+
+Optional JSON metadata for future extensibility.
+
+Do not make this field mandatory for normal memory retrieval.
+
+#### created_at
+
+Timestamp when the experience was created.
+
+---
+
+# 7. Vector Storage
+
+The system must use **sqlite-vec** for semantic vector search.
+
+Do not implement a custom vector-search algorithm.
+
+The vector storage should maintain a relationship between:
+
+```text
+experience_id
+```
+
+and:
+
+```text
+embedding
+```
+
+Conceptually:
+
+```text
+experience_id | embedding
+-------------------------
+1             | [ ... ]
+2             | [ ... ]
+3             | [ ... ]
+```
+
+The vector dimension must be determined by the actual embedding model being used.
+
+Do not hardcode an incorrect dimension.
+
+The implementation must verify that the vector dimension produced by `nomic-embed-text` matches the sqlite-vec storage configuration.
+
+---
+
+# 8. Embedding Generation
+
+Use:
+
+```text
+nomic-embed-text
+```
+
+for embedding generation.
+
+The embedding service must use the local Ollama endpoint configured through environment variables.
+
+Example:
+
+```text
+EMBEDDING_BASE_URL=http://localhost:11434
+EMBEDDING_MODEL=nomic-embed-text
+```
+
+No cloud embedding service may be used.
+
+---
+
+# 9. Memory Retrieval Workflow
+
+For every new user request:
+
+### Step 1
+
+Receive the request through ADK Web.
+
+Example:
+
+```text
+Calculate 20% of 500.
+```
+
+### Step 2
+
+Generate an embedding using `nomic-embed-text`.
+
+### Step 3
+
+Search sqlite-vec for similar previous experiences.
+
+The initial configuration should retrieve a small number of results, for example:
+
+```text
+Top K = 3
+```
+
+The value must be configurable.
+
+### Step 4
+
+Apply a similarity threshold.
+
+Do not blindly provide every vector-search result to the LLM.
+
+If results are below the configured relevance threshold, they should be ignored.
+
+The threshold must be configurable.
+
+### Step 5
+
+Build a memory context.
+
+Example:
+
+```text
+Relevant Past Experiences
+
+Experience 1:
+Task:
+Calculate 15% of 200.
+
+Response:
+30.
+
+Similarity:
+0.87
+```
+
+### Step 6
+
+Provide the memory context to Llama 3.2.
+
+### Step 7
+
+Generate the current response.
+
+### Step 8
+
+Store the current experience in SQLite.
+
+### Step 9
+
+Generate and store the embedding associated with the new experience.
+
+---
+
+# 10. Memory Must Not Override the Current Request
+
+The agent must not blindly copy previous answers.
+
+The agent instruction should communicate the following principle:
+
+```text
+Previous experiences are reference information only.
+
+Use them when they are relevant to the current request.
+
+Always solve the current request independently.
+
+Do not assume a previous response is correct simply because it exists in memory.
+
+If previous memory conflicts with the current request, follow the current request.
+```
+
+This is important because Phase 2 has no critic or evaluation system.
+
+---
+
+# 11. Persistent Memory Across Sessions
+
+The memory must survive:
+
+* ADK Web session changes
+* Agent restarts
+* Application restarts
+
+For example:
+
+### Session 1
+
+User:
+
+```text
+Calculate 15% of 200.
+```
+
+Agent:
+
+```text
+30
+```
+
+The experience is stored.
+
+### Restart/new session
+
+User:
+
+```text
+Calculate 20% of 500.
+```
+
+The system should still be able to retrieve the previous experience.
+
+This demonstrates that the memory is persistent and is not simply ADK conversation/session context.
+
+---
+
+# 12. Short-Term vs Long-Term Memory
+
+The implementation must clearly distinguish between:
+
+### ADK Session Context
+
+Used for:
+
+```text
+Current conversation
+Current session
+Recent messages
+```
+
+and:
+
+### Persistent Semantic Memory
+
+Used for:
+
+```text
+Past experiences
+Previous tasks
+Previous responses
+Semantic retrieval across sessions
+```
+
+SQLite + sqlite-vec represents the long-term memory mechanism for this POC.
+
+---
+
+# 13. Memory Service
+
+Memory functionality should be separated from the main agent implementation.
+
+The implementation should provide a simple memory abstraction containing capabilities conceptually similar to:
+
+```text
+generate_embedding()
+store_experience()
+retrieve_similar_experiences()
+build_memory_context()
+```
+
+The exact implementation/API can be chosen based on the supported Google ADK and sqlite-vec integration.
+
+Do not tightly couple SQLite implementation details to the root agent.
+
+---
+
+# 14. Deterministic Memory Retrieval
+
+Memory retrieval should be deterministic.
+
+The LLM should not decide whether to execute arbitrary database queries.
+
+The application should control:
+
+```text
+Generate embedding
+        ↓
+Vector search
+        ↓
+Similarity filtering
+        ↓
+Top-K memories
+        ↓
+Context construction
+        ↓
+LLM
+```
+
+This makes the POC easier to understand and debug.
+
+---
+
+# 15. Streamlit Developer Application
+
+Create a small Streamlit application for inspecting the memory system.
+
+Example startup:
+
+```text
+streamlit run developer_ui.py
+```
+
+The exact filename may be chosen by the implementation.
+
+The application must connect to the same SQLite database used by the agent.
+
+It must not create a second database.
+
+---
+
+# 16. Streamlit Screen 1 — Database Overview
+
+Display basic information such as:
+
+```text
+Database
+-------------------------
+Path: data/agent.db
+
+Experiences: 25
+
+Vector records: 25
+```
+
+Also show available SQLite tables.
+
+Example:
+
+```text
+Tables
+
+experiences
+experience_vectors
+...
+```
+
+The UI should allow the developer to select a table.
+
+---
+
+# 17. Streamlit Screen 2 — Experiences
+
+Display stored experiences in a table.
+
+Example:
+
+```text
+ID | Task | Response | Status | Created
+-------------------------------------------------
+1  | Calculate 15%... | 30 | success | ...
+2  | Calculate 20%... | 100 | success | ...
+```
+
+The developer should be able to select an experience and inspect its complete information.
+
+---
+
+# 18. Streamlit Screen 3 — Vector Data
+
+Provide a way to inspect the vector records.
+
+Display information such as:
+
+```text
+Experience ID:
+1
+
+Embedding Dimension:
+<actual dimension>
+
+Vector:
+[0.0234, -0.1821, 0.0912, ...]
+```
+
+The full vector does not need to be displayed by default.
+
+Provide an option such as:
+
+```text
+Show full vector
+```
+
+when the developer wants to inspect it.
+
+The UI should make it clear that the vector represents the semantic embedding generated from the experience.
+
+---
+
+# 19. Streamlit Screen 4 — Semantic Search
+
+This is one of the most important developer features.
+
+Provide a text box:
+
+```text
+Enter a query
+------------------------------
+Calculate 25% of 400
+```
+
+and a button:
+
+```text
+Search Similar Memories
+```
+
+When executed:
+
+1. Generate an embedding for the query.
+2. Search sqlite-vec.
+3. Retrieve the configured Top-K results.
+4. Display the results and similarity information.
+
+Example:
+
+```text
+Query:
+
+Calculate 25% of 400
+
+
+Results:
+
+1. Calculate 20% of 500
+   Similarity: 0.91
+   Experience ID: 2
+
+2. Calculate 15% of 200
+   Similarity: 0.87
+   Experience ID: 1
+```
+
+This feature is intended to visually demonstrate semantic search.
+
+---
+
+# 20. Streamlit Screen 5 — Memory Retrieval Trace
+
+Provide a simple visualization of the memory retrieval process.
+
+Example:
+
+```text
+User Request
+     │
+     ▼
+Generate Embedding
+     │
+     ▼
+sqlite-vec Search
+     │
+     ├── Experience #2
+     │   Similarity: 0.91
+     │
+     ├── Experience #1
+     │   Similarity: 0.87
+     │
+     └── Experience #5
+         Similarity: 0.82
+     │
+     ▼
+Similarity Threshold
+     │
+     ▼
+Relevant Memories
+     │
+     ▼
+Context Builder
+     │
+     ▼
+Llama 3.2
+```
+
+The purpose is educational and debugging-oriented.
+
+It should help the developer understand:
+
+```text
+User request
+     ↓
+Embedding
+     ↓
+Vector search
+     ↓
+Relevant memories
+     ↓
+LLM context
+```
+
+---
+
+# 21. Streamlit Must Be Read-Only
+
+The Streamlit application must not modify the memory database in Phase 2.
+
+It may:
+
+* SELECT data
+* Inspect tables
+* Inspect experiences
+* Inspect vectors
+* Run semantic searches
+* Display statistics
+* Display retrieval traces
+
+It must NOT:
+
+* Delete experiences
+* Modify experiences
+* Modify vectors
+* Insert experiences
+* Modify schema
+
+The agent remains responsible for writing memory.
+
+---
+
+# 22. Configuration
+
+Add configuration values to `.env`.
+
+Example:
+
+```text
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3.2
+
+EMBEDDING_BASE_URL=http://localhost:11434
+EMBEDDING_MODEL=nomic-embed-text
+
+DATABASE_PATH=data/agent.db
+
+MEMORY_TOP_K=3
+MEMORY_SIMILARITY_THRESHOLD=<configured value>
+```
+
+Do not hardcode environment-specific values in application code.
+
+---
+
+# 23. Recommended Project Structure
+
+The project should evolve toward:
+
+```text
+self-improving-agent/
+│
+├── self_improving_agent/
+│   ├── __init__.py
+│   ├── agent.py
+│   ├── config.py
+│   │
+│   └── memory/
+│       ├── __init__.py
+│       ├── memory.py
+│       ├── embeddings.py
+│       ├── database.py
+│       └── retrieval.py
+│
+├── database/
+│   └── schema.sql
+│
+├── data/
+│   └── agent.db
+│
+├── developer_ui/
+│   └── app.py
+│
+├── tests/
+│   ├── test_agent.py
+│   ├── test_memory.py
+│   ├── test_embeddings.py
+│   └── test_vector_search.py
+│
+├── .env.example
+├── .gitignore
+├── pyproject.toml
+├── uv.lock
+└── README.md
+```
+
+The implementation may simplify this structure if unnecessary, but the memory functionality should remain modular.
+
+---
+
+# 24. Database Initialization
+
+The application must automatically create the required SQLite database and tables when the application is initialized.
+
+The initialization must be safe to run multiple times.
+
+It must not destroy existing memory.
+
+The implementation must support a new empty database.
+
+Example:
+
+```text
+First run
+    ↓
+Create database
+    ↓
+Create experiences table
+    ↓
+Create sqlite-vec vector storage
+```
+
+Subsequent runs must reuse the existing database.
+
+---
+
+# 25. Error Handling
+
+The system must gracefully handle:
+
+### Embedding service unavailable
+
+The agent should produce a clear error rather than silently continuing with invalid memory.
+
+### SQLite unavailable
+
+Return/log a clear database error.
+
+### sqlite-vec unavailable
+
+Return/log a clear vector-search error.
+
+### No previous memories
+
+The agent should continue normally.
+
+Example:
+
+```text
+No relevant previous experiences found.
+```
+
+This must NOT prevent the LLM from answering the request.
+
+### Invalid vector dimension
+
+Fail clearly and identify the mismatch.
+
+---
+
+# 26. Logging
+
+Add useful logs for debugging.
+
+At minimum, log:
+
+```text
+User request received
+
+Embedding generated
+
+Memory search started
+
+Number of memories searched
+
+Number of relevant memories found
+
+Experience IDs retrieved
+
+Similarity scores
+
+LLM response generated
+
+Experience stored
+```
+
+Example:
+
+```text
+Memory search:
+query="Calculate 20% of 500"
+top_k=3
+results=2
+
+Experience #12 similarity=0.91
+Experience #7 similarity=0.86
+```
+
+Do not log secrets or sensitive environment values.
+
+---
+
+# 27. Testing Requirements
+
+Automated tests must be added.
+
+## Test 1 — Database Initialization
+
+Verify that the SQLite database is created successfully.
+
+---
+
+## Test 2 — Experience Storage
+
+Store an experience and verify that it can be retrieved.
+
+---
+
+## Test 3 — Embedding Generation
+
+Verify that `nomic-embed-text` produces an embedding.
+
+The test should verify:
+
+* embedding exists
+* embedding is numeric
+* dimension is consistent
+
+---
+
+## Test 4 — Vector Storage
+
+Store an embedding in sqlite-vec and verify that it can be retrieved.
+
+---
+
+## Test 5 — Semantic Search
+
+Create multiple experiences.
+
+Search using a semantically related query.
+
+Verify that the expected experience appears among the top results.
+
+Do not require an exact similarity value because embedding/model implementations may vary.
+
+---
+
+## Test 6 — Similarity Threshold
+
+Verify that irrelevant/low-similarity results can be filtered.
+
+---
+
+## Test 7 — Memory Context
+
+Verify that retrieved memories are correctly converted into context for the agent.
+
+---
+
+## Test 8 — Persistent Memory
+
+Store an experience.
+
+Close/reinitialize the application.
+
+Verify that the experience is still available.
+
+---
+
+## Test 9 — Empty Memory
+
+Verify that the agent works correctly when the database contains no previous experiences.
+
+---
+
+## Test 10 — Streamlit Database Access
+
+Verify that Streamlit can open the same SQLite database and display stored experiences.
+
+---
+
+# 28. Manual Acceptance Test
+
+The following scenario must work end-to-end.
+
+## Step 1
+
+Start Ollama/Llama 3.2.
+
+## Step 2
+
+Start the ADK Web interface:
+
+```text
+adk web
+```
+
+## Step 3
+
+Start Streamlit:
+
+```text
+streamlit run developer_ui/app.py
+```
+
+## Step 4
+
+Open ADK Web.
+
+Ask:
+
+```text
+Calculate 15% of 200.
+```
+
+Expected:
+
+```text
+30
+```
+
+## Step 5
+
+Open Streamlit.
+
+Verify that an experience exists:
+
+```text
+Task:
+Calculate 15% of 200.
+
+Response:
+30
+```
+
+Verify that a corresponding vector exists.
+
+---
+
+# 29. Semantic Search Acceptance Test
+
+In Streamlit, enter:
+
+```text
+Calculate 20% of 500.
+```
+
+Run:
+
+```text
+Search Similar Memories
+```
+
+The system should return the previous percentage-calculation experience as a semantically related result.
+
+The exact similarity score is not prescribed.
+
+---
+
+# 30. Cross-Session Acceptance Test
+
+Start a new ADK Web session.
+
+Ask:
+
+```text
+Calculate 20% of 500.
+```
+
+The system must:
+
+```text
+Generate embedding
+       ↓
+Search sqlite-vec
+       ↓
+Retrieve previous experience
+       ↓
+Build memory context
+       ↓
+Send context to Llama 3.2
+       ↓
+Generate answer
+       ↓
+Store new experience
+```
+
+Expected answer:
+
+```text
+100
+```
+
+The developer must be able to verify the retrieval through logs and/or Streamlit.
+
+---
+
+# 31. Database Visualization Acceptance Test
+
+Streamlit must allow the developer to see:
+
+```text
+SQLite database
+       ↓
+Experiences
+       ↓
+Vector records
+       ↓
+Embedding information
+       ↓
+Semantic search
+       ↓
+Similarity results
+```
+
+The developer should be able to understand the complete memory process without directly opening the SQLite database using an external database tool.
+
+---
+
+# 32. Performance Requirements
+
+Phase 2 is a local POC.
+
+Do not optimize prematurely.
+
+However:
+
+* Vector search must use sqlite-vec.
+* Do not load every embedding into Python and manually calculate similarity.
+* Do not send the entire memory database to Llama 3.2.
+* Only retrieve Top-K relevant memories.
+* Keep the memory context small.
+
+The system should remain responsive for a small local POC database.
+
+---
+
+# 33. Security and Safety
+
+The Streamlit application is a developer tool.
+
+It should run locally.
+
+Do not expose it publicly.
+
+Do not add authentication infrastructure in Phase 2.
+
+Do not expose database write operations through Streamlit.
+
+Do not place API keys or secrets into source code.
+
+---
+
+# 34. Documentation
+
+Update `README.md` with:
+
+### Starting the agent
+
+```text
+adk web
+```
+
+### Starting the developer visualization
+
+```text
+streamlit run developer_ui/app.py
+```
+
+### Architecture
+
+Document:
+
+```text
+ADK Web
+   ↓
+ADK Agent
+   ↓
+Memory Retrieval
+   ↓
+nomic-embed-text
+   ↓
+sqlite-vec
+   ↓
+SQLite
+   ↓
+Llama 3.2
+```
+
+### Developer Visualization
+
+Explain that Streamlit is:
+
+```text
+Read-only
+Developer-only
+Database/vector visualization
+```
+
+---
+
+# 35. Important Architectural Rule
+
+Do not turn Phase 2 into a self-learning system.
+
+At the end of Phase 2, the agent should only do:
+
+```text
+Remember
+   ↓
+Retrieve
+   ↓
+Use memory
+   ↓
+Store new experience
+```
+
+It must NOT do:
+
+```text
+Evaluate
+   ↓
+Criticize
+   ↓
+Learn
+   ↓
+Change strategy
+```
+
+Those capabilities begin in Phase 3.
+
+---
+
+# 36. Expected Phase 2 Architecture
+
+At the end of Phase 2:
+
+```text
+                         ┌─────────────────┐
+                         │    ADK Web      │
+                         └────────┬────────┘
+                                  │
+                                  ▼
+                         ┌─────────────────┐
+                         │    ADK Agent    │
+                         └────────┬────────┘
+                                  │
+                                  ▼
+                       ┌──────────────────────┐
+                       │  Memory Retrieval    │
+                       └──────────┬───────────┘
+                                  │
+                    ┌─────────────┴─────────────┐
+                    ▼                           ▼
+             ┌──────────────┐             ┌─────────────┐
+             │   Embedding  │             │   SQLite    │
+             │ nomic-embed  │             │ Experiences │
+             └──────┬───────┘             └──────┬──────┘
+                    │                            │
+                    └─────────────┬──────────────┘
+                                  ▼
+                           ┌────────────┐
+                           │ sqlite-vec │
+                           └─────┬──────┘
+                                 │
+                                 ▼
+                         Relevant Memories
+                                 │
+                                 ▼
+                         ┌─────────────┐
+                         │ Context     │
+                         │ Builder     │
+                         └──────┬──────┘
+                                │
+                                ▼
+                         ┌─────────────┐
+                         │  Llama 3.2  │
+                         └──────┬──────┘
+                                │
+                                ▼
+                              Answer
+                                │
+                                ▼
+                         Store Experience
+
+
+                 ┌────────────────────────┐
+                 │      Streamlit         │
+                 │ Developer Visualization│
+                 └───────────┬────────────┘
+                             │
+                          READ ONLY
+                             │
+                             ▼
+                    SQLite + sqlite-vec
+```
+
+---
+
+# 37. Definition of Done
+
+Phase 2 is complete when all of the following are true:
+
+* [ ] SQLite database is created successfully.
+* [ ] Experience records can be stored.
+* [ ] `nomic-embed-text` generates embeddings.
+* [ ] sqlite-vec stores embeddings.
+* [ ] Semantic similarity search works.
+* [ ] Top-K memory retrieval works.
+* [ ] Similarity threshold works.
+* [ ] Retrieved memories are supplied to the LLM.
+* [ ] New experiences are persisted.
+* [ ] Memory survives application/session restart.
+* [ ] Agent continues working when no memory exists.
+* [ ] ADK Web remains the only agent/chat interface.
+* [ ] Streamlit developer application works.
+* [ ] Streamlit can inspect SQLite tables.
+* [ ] Streamlit can inspect experiences.
+* [ ] Streamlit can inspect vector information.
+* [ ] Streamlit can perform semantic search.
+* [ ] Streamlit can show similarity results.
+* [ ] Streamlit is read-only.
+* [ ] Logging shows the memory retrieval flow.
+* [ ] Automated tests pass.
+* [ ] README is updated.
+* [ ] No self-evaluation or self-learning functionality has been introduced.
+
+---
+
+# 38. Phase 2 Success Statement
+
+At the end of Phase 2, the system should demonstrate:
+
+> **"The agent can remember previous experiences, find relevant memories using semantic vector search, use those memories while answering new requests, persist the memories in SQLite, and allow the developer to visually inspect how the memory system works through Streamlit."**
+
+This provides the foundation for **Phase 3 — Self-Evaluation, Learning, and Graph-Based Relationships**.

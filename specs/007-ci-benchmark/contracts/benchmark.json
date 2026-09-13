@@ -1,0 +1,12 @@
+# Phase 1: Contracts
+
+```json
+{
+  "name": "benchmark_task",
+  "schema": {
+    "task_id": "string",
+    "prompt": "string",
+    "expected_concepts": ["string"]
+  }
+}
+```

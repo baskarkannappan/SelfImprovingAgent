@@ -1,0 +1,1891 @@
+# Phase 3 — Self-Evaluation, Learning, and Graph Relationships
+
+## 1. Objective
+
+The objective of Phase 3 is to evolve the Phase 2 memory-enabled agent into a system that can:
+
+1. Solve a user's request.
+2. Retrieve relevant previous experiences.
+3. Generate an answer.
+4. Evaluate the quality of its own answer.
+5. Identify what was done well or poorly.
+6. Extract reusable lessons.
+7. Store evaluations and lessons persistently.
+8. Connect tasks, experiences, evaluations, and lessons using GraphQLite.
+9. Retrieve relevant lessons during future requests.
+10. Allow the developer to visualize the complete process through Streamlit.
+
+Phase 3 introduces the first version of the **self-improvement loop**.
+
+The system should move from:
+
+```text
+Phase 2:
+
+Remember → Retrieve → Answer
+```
+
+to:
+
+```text
+Phase 3:
+
+Remember
+   ↓
+Retrieve
+   ↓
+Answer
+   ↓
+Evaluate
+   ↓
+Learn
+   ↓
+Remember the lesson
+```
+
+---
+
+# 2. Scope
+
+## 2.1 In Scope
+
+Phase 3 must include:
+
+* Existing Phase 2 persistent memory
+* Existing sqlite-vec semantic search
+* Main agent
+* Critic/Evaluator agent
+* Learner agent
+* Evaluation records
+* Lesson records
+* GraphQLite relationships
+* Evaluation status
+* Lesson extraction
+* Lesson retrieval
+* Memory + lesson context
+* Self-evaluation workflow
+* Learning workflow
+* Persistent evaluation data
+* Persistent lesson data
+* Streamlit developer visualization
+* Evaluation visualization
+* Lesson visualization
+* Graph relationship visualization
+* Retrieval trace visualization
+* Automated tests
+* Manual acceptance tests
+
+---
+
+# 3. Out of Scope
+
+Phase 3 must NOT implement:
+
+* Strategy optimization
+* Automatic strategy selection
+* A/B testing of strategies
+* Reinforcement learning
+* Model fine-tuning
+* Model training
+* Automatic prompt rewriting
+* Automatic source-code modification
+* Autonomous code generation/modification of the agent
+* Multiple independent LLM models
+* Neo4j
+* PostgreSQL
+* Cloud LLM
+* Production UI
+* Custom chat UI
+* Custom REST API
+
+Strategy optimization belongs to Phase 4.
+
+---
+
+# 4. Core Concept
+
+Phase 3 introduces three logical agent roles.
+
+## Main Agent
+
+Responsible for answering the user's request.
+
+```text
+User
+ ↓
+Main Agent
+ ↓
+Answer
+```
+
+## Evaluator
+
+Responsible for judging the answer.
+
+```text
+Task
+ +
+Answer
+ ↓
+Evaluator
+ ↓
+Evaluation
+```
+
+## Learner
+
+Responsible for extracting reusable knowledge from the evaluation.
+
+```text
+Experience
+ +
+Evaluation
+ ↓
+Learner
+ ↓
+Lesson
+```
+
+These are logical roles.
+
+The implementation may use the same local Llama 3.2 model for all three roles.
+
+No separate cloud models are required.
+
+---
+
+# 5. Overall Architecture
+
+The Phase 3 architecture should be:
+
+```text
+                         ┌────────────────────┐
+                         │      ADK Web       │
+                         │    Chat Interface  │
+                         └─────────┬──────────┘
+                                   │
+                                   ▼
+                         ┌────────────────────┐
+                         │     Main Agent     │
+                         └─────────┬──────────┘
+                                   │
+                                   ▼
+                         ┌────────────────────┐
+                         │ Memory Retrieval   │
+                         └─────────┬──────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    ▼                             ▼
+             ┌──────────────┐              ┌──────────────┐
+             │  sqlite-vec  │              │  GraphQLite  │
+             │ Vector Memory│              │ Relationships│
+             └──────┬───────┘              └──────┬───────┘
+                    │                             │
+                    └──────────────┬──────────────┘
+                                   ▼
+                         ┌────────────────────┐
+                         │ Context Builder    │
+                         │                    │
+                         │ Experiences        │
+                         │ Lessons            │
+                         └─────────┬──────────┘
+                                   │
+                                   ▼
+                         ┌────────────────────┐
+                         │     Llama 3.2      │
+                         └─────────┬──────────┘
+                                   │
+                                   ▼
+                                Answer
+                                   │
+                                   ▼
+                         ┌────────────────────┐
+                         │ Evaluator/Critic   │
+                         └─────────┬──────────┘
+                                   │
+                                   ▼
+                         ┌────────────────────┐
+                         │    Evaluation      │
+                         └─────────┬──────────┘
+                                   │
+                                   ▼
+                         ┌────────────────────┐
+                         │     Learner        │
+                         └─────────┬──────────┘
+                                   │
+                                   ▼
+                         ┌────────────────────┐
+                         │      Lesson        │
+                         └─────────┬──────────┘
+                                   │
+                                   ▼
+                         ┌────────────────────┐
+                         │ SQLite + GraphQLite│
+                         │ + sqlite-vec       │
+                         └────────────────────┘
+```
+
+---
+
+# 6. Main Execution Flow
+
+For every user request:
+
+```text
+1. Receive request
+        ↓
+2. Retrieve relevant experiences
+        ↓
+3. Retrieve relevant lessons
+        ↓
+4. Build context
+        ↓
+5. Main Agent generates answer
+        ↓
+6. Store experience
+        ↓
+7. Evaluator evaluates answer
+        ↓
+8. Store evaluation
+        ↓
+9. Learner analyzes evaluation
+        ↓
+10. Create lesson if appropriate
+        ↓
+11. Store lesson
+        ↓
+12. Create/update graph relationships
+```
+
+The evaluation and learning stages must not interfere with the user's primary answer.
+
+The user should receive the main answer normally.
+
+---
+
+# 7. Main Agent
+
+The Main Agent is the existing Phase 2 agent.
+
+Its responsibility remains:
+
+> Solve the current user request using relevant memory and lessons.
+
+The Main Agent should receive:
+
+```text
+Current User Request
+
+Relevant Previous Experiences
+
+Relevant Lessons
+```
+
+Example:
+
+```text
+Current Request:
+Calculate 20% of 500.
+
+Relevant Experience:
+Calculate 15% of 200 → 30
+
+Relevant Lesson:
+Verify numerical calculations before responding.
+```
+
+The Main Agent should solve the current problem independently.
+
+---
+
+# 8. Evaluator / Critic
+
+Introduce a logical Evaluator component.
+
+Its responsibility is:
+
+> Evaluate the answer produced by the Main Agent.
+
+Input:
+
+```text
+Task
+Answer
+Relevant Context
+```
+
+Output:
+
+```text
+Evaluation
+```
+
+The Evaluator should not modify the Main Agent's answer.
+
+---
+
+# 9. Evaluation Model
+
+Create a persistent evaluation record.
+
+Conceptually:
+
+```text
+evaluations
+--------------------------------
+id
+experience_id
+correct
+quality
+confidence
+reason
+created_at
+```
+
+The exact schema may be adjusted during implementation.
+
+---
+
+# 10. Evaluation Fields
+
+## 10.1 Correct
+
+Possible values:
+
+```text
+true
+false
+unknown
+```
+
+`unknown` must be supported.
+
+The Evaluator must not be forced to claim that an answer is correct when correctness cannot be determined.
+
+---
+
+## 10.2 Quality
+
+Use a simple controlled set.
+
+For example:
+
+```text
+excellent
+good
+acceptable
+poor
+```
+
+Do not create an unnecessarily complex scoring system.
+
+---
+
+## 10.3 Confidence
+
+The Evaluator should indicate confidence:
+
+```text
+high
+medium
+low
+```
+
+This is important because an LLM evaluator can itself be uncertain.
+
+---
+
+## 10.4 Reason
+
+A concise explanation of why the answer received the evaluation.
+
+Example:
+
+```text
+The calculation is correct and directly answers the user's question.
+```
+
+or:
+
+```text
+The response gives an incorrect percentage calculation.
+```
+
+---
+
+# 11. Evaluation Example
+
+Input:
+
+```text
+Task:
+What is 15% of 200?
+
+Answer:
+30
+```
+
+Evaluation:
+
+```json
+{
+  "correct": true,
+  "quality": "good",
+  "confidence": "high",
+  "reason": "15% of 200 equals 30."
+}
+```
+
+---
+
+# 12. Incorrect Answer Example
+
+Input:
+
+```text
+Task:
+What is 15% of 200?
+
+Answer:
+35
+```
+
+Possible evaluation:
+
+```json
+{
+  "correct": false,
+  "quality": "poor",
+  "confidence": "high",
+  "reason": "15% of 200 equals 30, not 35."
+}
+```
+
+The system must preserve this evaluation.
+
+---
+
+# 13. Unknown Evaluation
+
+For subjective questions:
+
+```text
+Task:
+Explain microservices architecture.
+```
+
+There may not be one universally correct answer.
+
+The evaluator may produce:
+
+```json
+{
+  "correct": "unknown",
+  "quality": "good",
+  "confidence": "medium",
+  "reason": "The explanation is conceptually correct but could include additional details about service boundaries."
+}
+```
+
+The system must support this case.
+
+---
+
+# 14. Evaluation Principles
+
+The Evaluator must follow these principles:
+
+1. Evaluate the current answer.
+2. Do not blindly agree with the Main Agent.
+3. Do not assume previous memory is correct.
+4. Clearly indicate uncertainty.
+5. Provide a concise reason.
+6. Do not modify the original answer.
+7. Do not create a lesson unless there is something reusable to learn.
+
+---
+
+# 15. Deterministic Evaluation
+
+Where possible, use deterministic checks instead of LLM evaluation.
+
+Examples:
+
+```text
+Mathematical calculations
+JSON structure
+Required fields
+Simple format validation
+Known expected values
+```
+
+For example:
+
+```text
+15% of 200
+```
+
+can be verified deterministically.
+
+The architecture should allow deterministic evaluators to be added later.
+
+---
+
+# 16. LLM Evaluation
+
+For subjective tasks, use the local Llama 3.2 model through the existing LiteLLM configuration.
+
+Example categories:
+
+```text
+Explanation quality
+Completeness
+Clarity
+Reasoning quality
+Code explanation quality
+```
+
+The evaluation mechanism should be modular so that deterministic evaluation can be used where possible and LLM evaluation where necessary.
+
+---
+
+# 17. Learner
+
+Introduce a logical Learner component.
+
+Its responsibility is:
+
+> Analyze the experience and evaluation and identify a reusable lesson.
+
+Input:
+
+```text
+Task
+Answer
+Evaluation
+```
+
+Output:
+
+```text
+Lesson
+```
+
+The Learner must not rewrite the Main Agent's system prompt.
+
+The Learner must not modify source code.
+
+The Learner creates persistent knowledge that can be retrieved later.
+
+---
+
+# 18. Lesson Data Model
+
+Create a persistent lesson record.
+
+Conceptually:
+
+```text
+lessons
+--------------------------------
+id
+lesson_text
+lesson_type
+source_experience_id
+source_evaluation_id
+confidence
+created_at
+```
+
+Optional metadata may be stored as JSON.
+
+---
+
+# 19. Lesson Example
+
+Evaluation:
+
+```text
+The numerical answer was incorrect.
+```
+
+Learner:
+
+```text
+Lesson:
+
+Verify numerical calculations before producing the final answer.
+```
+
+Another example:
+
+```text
+Lesson:
+
+When generating code, verify that all referenced methods and variables exist in the provided context.
+```
+
+---
+
+# 20. Lesson Types
+
+Keep lesson types simple.
+
+Examples:
+
+```text
+error_prevention
+reasoning
+formatting
+domain_knowledge
+verification
+communication
+```
+
+The exact list can evolve.
+
+Do not introduce complex taxonomy in Phase 3.
+
+---
+
+# 21. When to Create a Lesson
+
+The Learner should not create a lesson for every successful interaction.
+
+For example:
+
+```text
+User:
+Hello.
+
+Agent:
+Hello! How can I help?
+
+Evaluation:
+Good.
+```
+
+This does not necessarily produce a useful lesson.
+
+A lesson should be created when the experience contains reusable information.
+
+Examples:
+
+```text
+A mistake occurred.
+A better reasoning approach was identified.
+A useful verification rule was discovered.
+A recurring weakness was identified.
+A useful response pattern was discovered.
+```
+
+---
+
+# 22. Lesson Confidence
+
+Lessons should have a confidence value.
+
+For example:
+
+```text
+high
+medium
+low
+```
+
+Low-confidence lessons should not be treated as authoritative instructions.
+
+---
+
+# 23. Lesson Retrieval
+
+Phase 3 must extend the Phase 2 retrieval process.
+
+The system should retrieve:
+
+```text
+Relevant Experiences
++
+Relevant Lessons
+```
+
+The retrieval flow becomes:
+
+```text
+User Request
+      │
+      ├───────────────┐
+      ▼               ▼
+Experience Search   Lesson Search
+sqlite-vec          sqlite-vec
+      │               │
+      └───────┬───────┘
+              ▼
+        Context Builder
+              │
+              ▼
+          Main Agent
+```
+
+Lessons may be embedded and stored using the same sqlite-vec infrastructure.
+
+---
+
+# 24. Lesson Embeddings
+
+Lessons should have embeddings so that future requests can retrieve semantically related lessons.
+
+Conceptually:
+
+```text
+lessons
+   │
+   └── lesson embedding
+            │
+            ▼
+        sqlite-vec
+```
+
+The same local `nomic-embed-text` model may be used.
+
+---
+
+# 25. GraphQLite
+
+Phase 3 introduces GraphQLite as the relationship layer.
+
+The purpose is to represent relationships between:
+
+```text
+Tasks
+Experiences
+Evaluations
+Lessons
+```
+
+The graph should not replace SQLite or sqlite-vec.
+
+Use:
+
+```text
+SQLite
+    ↓
+Structured records
+
+sqlite-vec
+    ↓
+Semantic similarity
+
+GraphQLite
+    ↓
+Relationships
+```
+
+---
+
+# 26. Initial Graph Model
+
+The graph should conceptually contain:
+
+```text
+Task
+Experience
+Evaluation
+Lesson
+```
+
+Relationships:
+
+```text
+Task
+  │
+  │ produced
+  ▼
+Experience
+  │
+  │ evaluated_by
+  ▼
+Evaluation
+  │
+  │ produced
+  ▼
+Lesson
+```
+
+---
+
+# 27. Additional Relationships
+
+The system may support:
+
+```text
+Experience ──similar_to──> Experience
+
+Lesson ──applies_to──> Task
+
+Lesson ──derived_from──> Evaluation
+
+Evaluation ──evaluates──> Experience
+```
+
+Only implement relationships that are actually needed.
+
+Do not create unnecessary graph complexity.
+
+---
+
+# 28. GraphQLite as Relationship Store
+
+Do not implement a custom graph engine.
+
+Do not create a custom:
+
+```text
+nodes table
+relationships table
+```
+
+just to replace the graph functionality provided by GraphQLite.
+
+Use the supported GraphQLite capabilities for graph operations.
+
+The implementation must follow the actual GraphQLite API/version installed in the project.
+
+---
+
+# 29. Three Storage Responsibilities
+
+By the end of Phase 3:
+
+### SQLite
+
+Stores structured records:
+
+```text
+Experiences
+Evaluations
+Lessons
+Metadata
+```
+
+### sqlite-vec
+
+Stores embeddings and performs semantic similarity search:
+
+```text
+Experience embeddings
+Lesson embeddings
+```
+
+### GraphQLite
+
+Stores/queries relationships:
+
+```text
+Experience → Evaluation
+Evaluation → Lesson
+Lesson → Task
+Experience → Experience
+```
+
+---
+
+# 30. Self-Improvement Loop
+
+The full loop should be:
+
+```text
+                  ┌─────────────────┐
+                  │      Task       │
+                  └────────┬────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │ Memory Retrieval│
+                  └────────┬────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │   Main Agent    │
+                  └────────┬────────┘
+                           │
+                           ▼
+                       Answer
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │    Evaluator    │
+                  └────────┬────────┘
+                           │
+                           ▼
+                     Evaluation
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │     Learner     │
+                  └────────┬────────┘
+                           │
+                           ▼
+                       Lesson
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │ Persistent      │
+                  │ Memory          │
+                  └─────────────────┘
+```
+
+---
+
+# 31. Important Boundary
+
+Phase 3 must NOT automatically change the agent's behavior by modifying:
+
+```text
+System prompt
+Python source code
+Agent configuration
+Model weights
+```
+
+Instead:
+
+```text
+Evaluation
+   ↓
+Lesson
+   ↓
+Future retrieval
+   ↓
+Future context
+```
+
+This provides a controlled form of learning.
+
+---
+
+# 32. Streamlit Developer UI
+
+Extend the Phase 2 Streamlit application.
+
+The existing Phase 2 functionality must continue working.
+
+Add:
+
+```text
+Experiences
+Vectors
+Semantic Search
+Retrieval Trace
+```
+
+and add:
+
+```text
+Evaluations
+Lessons
+Graph Relationships
+Learning Trace
+```
+
+---
+
+# 33. Streamlit — Evaluation View
+
+Display evaluations.
+
+Example:
+
+```text
+Experience #12
+
+Task:
+What is 15% of 200?
+
+Answer:
+30
+
+Evaluation:
+----------------------------
+Correct: YES
+Quality: GOOD
+Confidence: HIGH
+
+Reason:
+The calculation is correct.
+```
+
+Allow the developer to select an experience and see its evaluation.
+
+---
+
+# 34. Streamlit — Lesson View
+
+Display lessons.
+
+Example:
+
+```text
+Lesson #7
+
+Lesson:
+Verify numerical calculations before responding.
+
+Type:
+error_prevention
+
+Confidence:
+HIGH
+
+Source Experience:
+#12
+
+Source Evaluation:
+#12
+```
+
+---
+
+# 35. Streamlit — Learning Trace
+
+Provide a visualization:
+
+```text
+Task
+ │
+ ▼
+Experience
+ │
+ ▼
+Evaluation
+ │
+ ├── Correct
+ │
+ ├── Quality
+ │
+ └── Reason
+ │
+ ▼
+Learner
+ │
+ ▼
+Lesson
+```
+
+This is intended to help the developer understand the self-improvement process.
+
+---
+
+# 36. Streamlit — Graph View
+
+Provide a simple graph visualization or relationship explorer.
+
+Example:
+
+```text
+Experience #12
+      │
+      │ evaluated_by
+      ▼
+Evaluation #12
+      │
+      │ produced
+      ▼
+Lesson #7
+```
+
+The visualization does not need to be sophisticated.
+
+A simple relationship table is acceptable for the first implementation if a graph visualization library introduces unnecessary complexity.
+
+---
+
+# 37. Streamlit — Relationship Explorer
+
+Allow the developer to select:
+
+```text
+Experience #12
+```
+
+and see:
+
+```text
+Related Objects
+----------------------------
+
+Evaluation:
+#12
+
+Lessons:
+#7
+
+Similar Experiences:
+#4
+#9
+```
+
+This provides a simple way to understand the graph.
+
+---
+
+# 38. Streamlit Read-Only Rule
+
+The Streamlit developer application remains read-only.
+
+It must not allow the developer to:
+
+* Edit evaluations
+* Edit lessons
+* Delete lessons
+* Delete experiences
+* Modify graph relationships
+* Modify vectors
+
+Phase 3 Streamlit is still an observability/debugging tool.
+
+---
+
+# 39. Evaluation Storage Flow
+
+After the Main Agent produces an answer:
+
+```text
+Answer
+ ↓
+Create Experience
+ ↓
+Evaluator
+ ↓
+Evaluation
+ ↓
+Store Evaluation
+```
+
+The original experience must remain unchanged.
+
+The evaluation is associated with it.
+
+---
+
+# 40. Learning Storage Flow
+
+After evaluation:
+
+```text
+Experience
++
+Evaluation
+ ↓
+Learner
+ ↓
+Lesson or No Lesson
+```
+
+If no useful lesson is found:
+
+```text
+Lesson = NONE
+```
+
+The system must not create meaningless lessons.
+
+---
+
+# 41. Graph Update Flow
+
+After storing the records:
+
+```text
+Experience
+     │
+     └── evaluated_by ──> Evaluation
+                              │
+                              └── produced ──> Lesson
+```
+
+If no lesson is generated:
+
+```text
+Experience
+     │
+     └── evaluated_by ──> Evaluation
+```
+
+---
+
+# 42. Main Agent Context
+
+The Main Agent should receive a clearly separated context structure.
+
+Example:
+
+```text
+CURRENT REQUEST
+---------------
+Calculate 20% of 500.
+
+
+RELEVANT EXPERIENCES
+--------------------
+Experience #12
+Task: Calculate 15% of 200
+Response: 30
+
+
+RELEVANT LESSONS
+----------------
+Lesson #7
+Verify numerical calculations before responding.
+```
+
+The Main Agent must treat experiences and lessons as reference information.
+
+---
+
+# 43. Prevent Memory Contamination
+
+The system must recognize that:
+
+```text
+Experience
+```
+
+does not automatically mean:
+
+```text
+Correct knowledge
+```
+
+and:
+
+```text
+Lesson
+```
+
+does not automatically mean:
+
+```text
+Truth
+```
+
+The Main Agent should use confidence and relevance when interpreting lessons.
+
+---
+
+# 44. Evaluation Failure Handling
+
+If evaluation fails:
+
+```text
+Main Answer
+      │
+      ▼
+Evaluation Error
+```
+
+the user's answer should still be returned.
+
+The evaluation failure must be logged.
+
+The system must not fail the entire user interaction because the critic failed.
+
+---
+
+# 45. Learning Failure Handling
+
+If learning fails:
+
+```text
+Main Answer
+      │
+      ▼
+Evaluation
+      │
+      ▼
+Learning Error
+```
+
+the main answer and evaluation should remain available.
+
+The system must log the learning failure.
+
+---
+
+# 46. Asynchronous Evaluation
+
+Evaluation and learning may be performed after the main answer is produced.
+
+The design should allow:
+
+```text
+User
+ ↓
+Main Agent
+ ↓
+Answer returned
+```
+
+while:
+
+```text
+Evaluation
+ ↓
+Learning
+```
+
+can happen afterward.
+
+For the POC, synchronous execution is acceptable initially if it simplifies implementation.
+
+The architecture should remain modular enough to make evaluation asynchronous later.
+
+---
+
+# 47. Configuration
+
+Extend `.env` with configurable values.
+
+Example:
+
+```text
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3.2
+
+EMBEDDING_BASE_URL=http://localhost:11434
+EMBEDDING_MODEL=nomic-embed-text
+
+DATABASE_PATH=data/agent.db
+
+MEMORY_TOP_K=3
+MEMORY_SIMILARITY_THRESHOLD=<configured value>
+
+LESSON_TOP_K=3
+LESSON_SIMILARITY_THRESHOLD=<configured value>
+```
+
+Do not hardcode environment-specific configuration.
+
+---
+
+# 48. Logging
+
+Add logs for:
+
+```text
+Main request
+Memory retrieval
+Lesson retrieval
+Main Agent response
+Experience storage
+Evaluation started
+Evaluation completed
+Evaluation result
+Learning started
+Lesson generated
+Lesson stored
+Graph relationships created
+```
+
+Example:
+
+```text
+Evaluation:
+experience_id=12
+correct=true
+quality=good
+confidence=high
+```
+
+Example:
+
+```text
+Lesson:
+experience_id=12
+lesson_id=7
+type=verification
+confidence=high
+```
+
+---
+
+# 49. Testing Requirements
+
+## Test 1 — Evaluation Storage
+
+Create an experience and evaluation.
+
+Verify both are persisted.
+
+---
+
+## Test 2 — Correct Evaluation
+
+Provide a known correct answer.
+
+Verify that the evaluator can produce:
+
+```text
+correct = true
+```
+
+---
+
+## Test 3 — Incorrect Evaluation
+
+Provide a known incorrect answer.
+
+Verify:
+
+```text
+correct = false
+```
+
+---
+
+## Test 4 — Unknown Evaluation
+
+Provide a subjective task.
+
+Verify that:
+
+```text
+correct = unknown
+```
+
+is supported.
+
+---
+
+## Test 5 — Lesson Generation
+
+Provide an evaluation containing a reusable mistake.
+
+Verify that a lesson can be generated.
+
+---
+
+## Test 6 — No Lesson
+
+Provide a trivial interaction where no reusable lesson exists.
+
+Verify that the system does not create meaningless lessons.
+
+---
+
+## Test 7 — Lesson Storage
+
+Verify that generated lessons are persisted.
+
+---
+
+## Test 8 — Lesson Embedding
+
+Verify that a lesson can be embedded and stored in sqlite-vec.
+
+---
+
+## Test 9 — Lesson Retrieval
+
+Create a lesson and submit a semantically related request.
+
+Verify that the lesson can be retrieved.
+
+---
+
+## Test 10 — Graph Relationship
+
+Verify:
+
+```text
+Experience
+    ↓
+Evaluation
+```
+
+relationship.
+
+---
+
+## Test 11 — Graph Relationship
+
+Verify:
+
+```text
+Evaluation
+    ↓
+Lesson
+```
+
+relationship.
+
+---
+
+## Test 12 — Full Learning Cycle
+
+Verify:
+
+```text
+Request
+ ↓
+Answer
+ ↓
+Evaluation
+ ↓
+Lesson
+ ↓
+Persistence
+```
+
+---
+
+## Test 13 — Persistence
+
+Restart the application.
+
+Verify that:
+
+* Experiences remain
+* Evaluations remain
+* Lessons remain
+* Relationships remain
+* Vectors remain
+
+---
+
+## Test 14 — Evaluation Failure
+
+Simulate evaluator failure.
+
+Verify that the Main Agent answer is still returned.
+
+---
+
+## Test 15 — Learning Failure
+
+Simulate learner failure.
+
+Verify that the Main Agent answer and evaluation remain available.
+
+---
+
+# 50. End-to-End Acceptance Test
+
+Start:
+
+```text
+adk web
+```
+
+and:
+
+```text
+streamlit run developer_ui/app.py
+```
+
+Ask through ADK Web:
+
+```text
+What is 15% of 200?
+```
+
+Assume the Main Agent returns:
+
+```text
+30
+```
+
+The system should then:
+
+```text
+1. Store experience
+2. Evaluate answer
+3. Store evaluation
+4. Determine whether a lesson is useful
+5. Create lesson if appropriate
+6. Store lesson
+7. Create graph relationships
+```
+
+Streamlit should allow the developer to inspect the complete chain.
+
+---
+
+# 51. Error Demonstration
+
+The developer should also be able to test a deliberately incorrect response.
+
+For example, if the Main Agent produces:
+
+```text
+35
+```
+
+for:
+
+```text
+What is 15% of 200?
+```
+
+the evaluator should identify the problem.
+
+The Streamlit interface should then show:
+
+```text
+Experience
+    ↓
+Evaluation
+    Correct: FALSE
+    ↓
+Lesson
+    "Verify percentage calculations..."
+```
+
+This demonstrates actual learning from an error.
+
+---
+
+# 52. Future Retrieval Demonstration
+
+After the lesson has been stored, submit a related request:
+
+```text
+Calculate 25% of 400.
+```
+
+The system should be able to retrieve:
+
+```text
+Relevant Lesson:
+Verify numerical calculations before responding.
+```
+
+The Main Agent should use that lesson as supporting context.
+
+---
+
+# 53. Important Architectural Rule
+
+Phase 3 must not change the agent's source code based on lessons.
+
+The learning mechanism is:
+
+```text
+Experience
+     ↓
+Evaluation
+     ↓
+Lesson
+     ↓
+Persistent Knowledge
+     ↓
+Future Retrieval
+     ↓
+Future Context
+```
+
+Not:
+
+```text
+Experience
+     ↓
+Evaluation
+     ↓
+Modify Python code
+```
+
+---
+
+# 54. Phase 3 Data Relationship
+
+The conceptual data model is:
+
+```text
+┌──────────────┐
+│     Task     │
+└──────┬───────┘
+       │
+       │ produces
+       ▼
+┌──────────────┐
+│  Experience  │
+└──────┬───────┘
+       │
+       │ evaluated_by
+       ▼
+┌──────────────┐
+│ Evaluation   │
+└──────┬───────┘
+       │
+       │ produces
+       ▼
+┌──────────────┐
+│    Lesson    │
+└──────┬───────┘
+       │
+       │ applies_to
+       ▼
+┌──────────────┐
+│ Future Task  │
+└──────────────┘
+```
+
+Semantic relationships can additionally be discovered through sqlite-vec.
+
+---
+
+# 55. Phase 3 Storage Architecture
+
+The final storage responsibility should be:
+
+```text
+                  ┌─────────────────────┐
+                  │       SQLite        │
+                  │                     │
+                  │ Experiences         │
+                  │ Evaluations         │
+                  │ Lessons             │
+                  └──────────┬──────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+        sqlite-vec      GraphQLite       Metadata
+              │              │
+              │              │
+       Semantic Search   Relationships
+```
+
+Each technology should have a clear responsibility.
+
+---
+
+# 56. Phase 3 Success Criteria
+
+Phase 3 is successful when the system can demonstrate:
+
+```text
+"I answered a question."
+
+        ↓
+
+"I evaluated my answer."
+
+        ↓
+
+"I identified what I could learn."
+
+        ↓
+
+"I stored that lesson."
+
+        ↓
+
+"I can retrieve that lesson for a future related task."
+```
+
+---
+
+# 57. Definition of Done
+
+Phase 3 is complete when:
+
+* [ ] Phase 2 functionality continues to work.
+* [ ] Main Agent works with persistent memory.
+* [ ] Evaluator is implemented.
+* [ ] Evaluations are persisted.
+* [ ] Correct/incorrect/unknown evaluation is supported.
+* [ ] Quality is recorded.
+* [ ] Confidence is recorded.
+* [ ] Evaluation reasoning is recorded.
+* [ ] Learner is implemented.
+* [ ] Lessons can be generated.
+* [ ] Lessons can be persisted.
+* [ ] Lesson confidence is stored.
+* [ ] Lessons can be embedded.
+* [ ] Lessons can be retrieved through sqlite-vec.
+* [ ] GraphQLite relationships are implemented.
+* [ ] Experience → Evaluation relationship works.
+* [ ] Evaluation → Lesson relationship works.
+* [ ] Relevant lessons are included in future agent context.
+* [ ] Streamlit displays evaluations.
+* [ ] Streamlit displays lessons.
+* [ ] Streamlit displays learning traces.
+* [ ] Streamlit displays graph relationships.
+* [ ] Streamlit remains read-only.
+* [ ] Evaluation failures do not break the main response.
+* [ ] Learning failures do not break the main response.
+* [ ] Automated tests pass.
+* [ ] Persistence works across application restarts.
+* [ ] No strategy optimization is implemented.
+* [ ] No automatic prompt/code modification is implemented.
+* [ ] No model training/fine-tuning is implemented.
+
+---
+
+# 58. Phase 3 Final Architecture
+
+At the end of Phase 3, the system should conceptually look like:
+
+```
+                     ┌─────────────────┐
+                     │     ADK Web     │
+                     └────────┬────────┘
+                              │
+                              ▼
+                     ┌─────────────────┐
+                     │   Main Agent    │
+                     └────────┬────────┘
+                              │
+                ┌─────────────┴─────────────┐
+                ▼                           ▼
+         Experience Memory            Lesson Memory
+            sqlite-vec                 sqlite-vec
+                │                           │
+                └─────────────┬─────────────┘
+                              ▼
+                     ┌─────────────────┐
+                     │ Context Builder │
+                     └────────┬────────┘
+                              │
+                              ▼
+                          Llama 3.2
+                              │
+                              ▼
+                            Answer
+                              │
+                              ▼
+                     ┌─────────────────┐
+                     │    Evaluator    │
+                     └────────┬────────┘
+                              │
+                              ▼
+                         Evaluation
+                              │
+                              ▼
+                     ┌─────────────────┐
+                     │     Learner     │
+                     └────────┬────────┘
+                              │
+                              ▼
+                           Lesson
+                              │
+                ┌─────────────┴─────────────┐
+                ▼                           ▼
+             SQLite                     GraphQLite
+                │                           │
+                │                    Relationships
+                │                           │
+                └─────────────┬─────────────┘
+                              │
+                              ▼
+                     ┌─────────────────┐
+                     │    Streamlit    │
+                     │ Developer View  │
+                     └─────────────────┘
+```
+
+The resulting system should demonstrate:
+
+**Remember → Answer → Evaluate → Learn → Remember the lesson.**
+
+Phase 4 will build on this foundation by introducing **strategy selection and strategy optimization** rather than simply storing lessons.
